@@ -1,0 +1,8 @@
+syntax = "proto2";
+package TSres;
+
+message Response {
+  required uint32 s_no = 3; 
+  required uint32 c_no = 4;
+  required bool f = 5;
+}

@@ -1,0 +1,10 @@
+syntax = "proto2";
+package Schnorrkey;
+
+message Priv {
+  required bytes X = 1;
+}
+
+message Pub {
+  required bytes Y = 1;
+}

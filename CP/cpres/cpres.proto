@@ -1,0 +1,8 @@
+syntax = "proto2";
+package CPres;
+
+message Response {
+  repeated bytes R = 3; 
+  repeated bytes C = 4;
+  repeated bytes Proof = 5;
+}
