@@ -6,6 +6,7 @@ import (
     "crypto/x509"
     "encoding/binary"
     "errors"
+    "flag"
     "fmt"
     "github.com/danieldk/par"
     "github.com/dedis/crypto/abstract"
@@ -79,7 +80,7 @@ func main() {
     seed := rand.NewSource(time.Now().UnixNano())
     rnd := rand.New(seed)
 
-    cp_no, port := parseCommandline(os.Args) //Parse CP number, port no.
+    cp_no := parseCommandline(os.Args) //Parse CP number
 
     x := suite.Scalar().Pick(pseudorand) //CP private key
     y[cp_no - 1] = suite.Point().Mul(nil, x) //CP public key
@@ -140,7 +141,7 @@ func main() {
     clients := make(chan net.Conn)
 
     //Listen to the TCP port
-    sock := createServer(port)
+    sock := createServer("6100")
 
     //CP1 broadcasts data
     go broadcastCPData(cp_no, x, pub)
@@ -161,7 +162,7 @@ func main() {
 
         fmt.Println("I am waiting", runtime.NumGoroutine())
 
-        if conn := acceptConnections(cp_no, sock); conn != nil { //If Data is available
+        if conn := acceptConnections("CP" + strconv.Itoa(cp_no), sock); conn != nil { //If Data is available
 
             //Handle connections in separate channels
             go handleClients(clients, cp_no, x, pub)
@@ -960,21 +961,32 @@ func handleClients(clients chan net.Conn, cp_no int, x abstract.Scalar, pub *Sch
 }
 
 //Input: Command-line Arguments
-//Output: CP Name, Port No.
+//Output: CP number
 //Function: Parse Command-line Arguments
-func parseCommandline(arg []string) (int, string) {
-    cp, _ := strconv.Atoi(os.Args[1]) //CP name
-    port := "606" + os.Args[1] //port no.
+func parseCommandline(arg []string) (int) {
 
-    return cp, port
+    var cp_no int
+   
+    flag.IntVar(&cp_no, "c", 0, "CP number (required)")
+    flag.Parse()
+
+    if cp_no == 0 {
+
+        fmt.Println("Argument required:")
+        fmt.Println("     -c int")
+        fmt.Println("     CP number (Required)")
+        os.Exit(0)
+    }
+
+    return cp_no
 }
 
-//Input: Data, Destination
+//Input: Data, Source, Destination
 //Function: Send Data to Destination
-func sendDataToDest(data []byte, src int, dst int) {
+func sendDataToDest(data []byte, src string, dst string) {
 
     //Load Private Key and Certificate
-    cert, err := tls.LoadX509KeyPair("certs/CP" + strconv.Itoa(src) + ".cert", "private/CP" + strconv.Itoa(src)  + ".key")
+    cert, err := tls.LoadX509KeyPair("certs/" + src + ".cert", "private/CP" + src + ".key")
     checkError(err)
 
     //Add CA certificate to pool
@@ -983,8 +995,8 @@ func sendDataToDest(data []byte, src int, dst int) {
     caCertPool.AppendCertsFromPEM(caCert)
 
     //Dial TCP Connection
-    config := tls.Config{Certificates: []tls.Certificate{cert}, RootCAs: caCertPool, InsecureSkipVerify: true} #ServerName: "CP" + strconv.Itoa(dst),}
-    con,err := net.Dial("tcp", "localhost:606" + strconv.Itoa(dst))
+    config := tls.Config{Certificates: []tls.Certificate{cert}, RootCAs: caCertPool, InsecureSkipVerify: true} //ServerName: dst,}
+    con,err := net.Dial("tcp", "localhost:6100")
     checkError(err)
    
     //Convert to TLS Connection
@@ -1019,12 +1031,12 @@ func receiveData(conn net.Conn) []byte {
     return msg_buf
 }
 
-//Input: Listener
+//Input: Client common name, Listener
 //Output: Socket
 //Function: Accept new connections in  Socket
-func acceptConnections(cp int, listener net.Listener) *tls.Conn {
+func acceptConnections(cn string, listener net.Listener) *tls.Conn {
     //Create Server Socket
-    cert, err := tls.LoadX509KeyPair("certs/CP"+ strconv.Itoa(cp) +".cert", "private/CP" + strconv.Itoa(cp) + ".key")
+    cert, err := tls.LoadX509KeyPair("certs/"+ cn +".cert", "private/" + cn + ".key")
     checkError(err)
 
     //Add CA certificate to pool
@@ -1042,7 +1054,7 @@ func acceptConnections(cp int, listener net.Listener) *tls.Conn {
     return sock
 }
 
-//Input: CP Name, Port No.
+//Input: Port No.
 //Output: Server Socket
 //Function: Creates Server Socket
 func createServer(port string) net.Listener {
@@ -1083,7 +1095,7 @@ func broadcastData(step_no uint32, src int, data []byte) {
   
         //Send to all other CPs
         if i + 1 != src {
-            sendDataToDest(sign_msg, src, i + 1)
+            sendDataToDest(sign_msg, "CP" + strconv.Itoa(src), "CP" + strconv.Itoa(i + 1))
         }
     } 
 }
@@ -1116,7 +1128,7 @@ func sendDataN_1(step_no uint32, src int, cp int, data []byte) {
 
         //Send to other n-1 CPs
         if i + 1 != cp && i + 1 != src {
-                sendDataToDest(sign_msg, cp, i+1)
+                sendDataToDest(sign_msg, "CP" + strconv.Itoa(cp), "CP" + strconv.Itoa(i+1))
         }
     }
 }

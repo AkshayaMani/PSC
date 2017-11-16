@@ -50,7 +50,7 @@ func main() {
     fmt.Println("Started Tally Server")
 
     //Listen to the TCP port
-    sock := createServer("7071")
+    sock := createServer("5100")
     fmt.Println("No. of CPs, DPs", no_CPs, no_DPs, sock)
 
     //Signal CP1 to broadcast data
@@ -93,365 +93,19 @@ func broadcastCPData(cp_no int) {
     var tb bytes.Buffer //Temporary Buffer
     resp := new(TSres.Response)
 
-    if step_no == s_no { //If Step Number is 0
+    //Set TS response step no.
+    resp.s_no = step_no - s_no
 
-        //Set TS response step no.
-        resp.s_no = 0
+    //Set TS response CP no.
+    resp.c_no = cp_no
 
-        //Set TS response CP no.
-        resp.c_no = cp_no
+    //Set TS response broadcast flag
+    resp.c_no = true
 
-        //Set TS response broadcast flag
-        resp.c_no = true
+    //Convert to Bytes
+    resp1, _ := proto.Marshal(resp)
 
-    } else if step_no == s_no + 1 { //If Step Number is 1
-
-            //Set CP Response to Broadcast Public Key
-            resp.R = make([][]byte, 1)
-            resp.Proof = make([][]byte, 1)
-            resp.R[0] = pub.Y
-
-            //Create Proof
-            rep := proof.Rep("X", "x", "B")
-            secret := map[string]abstract.Scalar{"x": x}
-            public := map[string]abstract.Point{"B": suite.Point().Base(), "X": y[cp_no - 1]}
-            prover := rep.Prover(suite, secret, public, nil)
-            prf, _ := proof.HashProve(suite, strconv.Itoa(int(step_no)), pseudorand, prover)
-            resp.Proof[0] = make([]byte, len(prf))
-            copy(resp.Proof[0][:], prf)
-
-            //Convert to Bytes
-            resp1, _ := proto.Marshal(resp)
-
-            //Broadcast Public Key
-            broadcastData(step_no, cp_no, resp1)
-
-        } else if step_no == s_no + 2 { //If Step Number is 2
-
-            resp.R = make([][]byte, 2 * n)
-            resp.C = make([][]byte, 2 * n)
-            resp.Proof = make([][]byte, n)
-
-            xbar, ybar, prover := par.MapElgamalCiphersChunked(shuffleNoise, nr, nc, Y, n) //Parallel Shuffle n Noise Coins
-
-            //Iterate over all Noise Counters
-            for i := 0; i < n; i++ {
-
-                //Change its input as Shuffled Output for Next Verification
-                nr[i][0] = suite.Point().Set(xbar[i][0])
-                nr[i][1] = suite.Point().Set(xbar[i][1])
-                nc[i][0] = suite.Point().Set(ybar[i][0])
-                nc[i][1] = suite.Point().Set(ybar[i][1])
-
-                //Set CP Response to Broadcast Noise
-                tb.Reset() //Buffer Reset
-                xbar[i][0].MarshalTo(&tb)
-                resp.R[2*i] = make([]byte, len(tb.Bytes()))
-                copy(resp.R[2*i][:], tb.Bytes()) //Convert to bytes
-
-                tb.Reset() //Buffer Reset
-                xbar[i][1].MarshalTo(&tb)
-                resp.R[(2*i)+1] = make([]byte, len(tb.Bytes()))
-                copy(resp.R[(2*i)+1][:], tb.Bytes()) //Convert to bytes
-
-                tb.Reset() //Buffer Reset
-                ybar[i][0].MarshalTo(&tb)
-                resp.C[2*i] = make([]byte, len(tb.Bytes()))
-                copy(resp.C[2*i][:], tb.Bytes()) //Convert to bytes
-
-                tb.Reset() //Buffer Reset
-                ybar[i][1].MarshalTo(&tb)
-                resp.C[(2*i)+1] = make([]byte, len(tb.Bytes()))
-                copy(resp.C[(2*i)+1][:], tb.Bytes()) //Convert to bytes
-
-                prf, _ := proof.HashProve(suite, strconv.Itoa(int(step_no))+strconv.Itoa(i), pseudorand, prover[i])
-                resp.Proof[i] = make([]byte, len(prf))
-                copy(resp.Proof[i][:], prf)
-            }
-
-            //Convert to Bytes
-            resp1, _ := proto.Marshal(resp)
-
-            //Broadcast Shuffled Noise
-            broadcastData(step_no, cp_no, resp1)
- 
-            //If Last CP has Broadcasted
-            if cp_bcast == no_CPs {
-
-                //Iterate Over all Noise Counters
-                for i := b; i < b+n; i++ {
-
-                    //Select 1st Coin as Noise
-                    R[i] = suite.Point().Set(nr[i-b][0])
-                    C[i] = suite.Point().Set(nc[i-b][0])
-                }
-
-                b_flag = false //Set Broadcast Flag of All CPs to False (Nothing to do until DPs submit Responses!)
-            }
- 
-        } else if step_no == s_no + 3 && m_flag == true { //If Step Number is 3
-
-            tmp := suite.Scalar() //temporary
-            resp.R = make([][]byte, b)
-            resp.C = make([][]byte, b)
-            resp.Proof = make([][]byte, b)
-
-            r := make([]abstract.Point, b) //List of Elgamal Blinding Factors
-            c := make([]abstract.Point, b) //List of Elgamal Ciphers
-
-            //Iterate over all Counters
-            for i := 0; i < b; i++ {
-
-                //Set CP Response to Broadcast Elgamal Ciphertext of Message Shares
-                tmp.Pick(pseudorand)
-                tb.Reset() //Buffer Reset
-                r[i] = suite.Point().Mul(nil, tmp)
-                R[i].Add(R[i], r[i]) //Multiply Elgamal Bllinding Factors
-                _,_ = r[i].MarshalTo(&tb)
-                resp.R[i] = make([]byte, len(tb.Bytes()))
-                copy(resp.R[i][:], tb.Bytes()) //Convert to bytes
-
-                tb.Reset() //Buffer Reset
-                c[i] = suite.Point().Mul(Y, tmp)
-                c[i].Add(c[i], suite.Point().Mul(nil, c_j[i]))
-                C[i].Add(C[i], c[i]) //Multiply Elgamal Ciphers
-                _,_ = c[i].MarshalTo(&tb)
-                resp.C[i] = make([]byte, len(tb.Bytes()))
-                copy(resp.C[i][:], tb.Bytes()) //Convert to bytes
-
-                //Create Proof
-                rep := proof.Rep("X", "x", "B")
-                secret := map[string]abstract.Scalar{"x": tmp}
-                public := map[string]abstract.Point{"B": suite.Point().Base(), "X": r[i]}
-                prover := rep.Prover(suite, secret, public, nil)
-                prf, _ := proof.HashProve(suite, strconv.Itoa(int(step_no))+strconv.Itoa(i), pseudorand, prover)
-                resp.Proof[i] = make([]byte, len(prf))
-                copy(resp.Proof[i][:], prf)
-            }
-
-            //Convert to Bytes
-            resp1, _ := proto.Marshal(resp)
-
-            //Broadcast Elgamal Ciphertexts
-            broadcastData(step_no, cp_no, resp1)
-
-        } else if step_no == s_no + 4 { //If Step Number is 4
-
-            Xbar, Ybar, prover := shuffle.Shuffle(suite, nil, Y, R, C, pseudorand) //Shuffle Counters
-
-            //Assign to Output Vector and Convert to Bytes
-            resp.R = make([][]byte, b+n)
-            resp.C = make([][]byte, b+n)
-            resp.Proof = make([][]byte, 1)
-
-            prf, _ := proof.HashProve(suite, strconv.Itoa(int(step_no)), pseudorand, prover)
-            resp.Proof[0] = make([]byte, len(prf))
-            copy(resp.Proof[0][:], prf)
-
-            //Iterate over all Counters
-            for i := 0; i < b+n; i++ {
-
-                //Change its input as Shuffled Output for Next Verification
-                R[i] = suite.Point().Set(Xbar[i])
-                C[i] = suite.Point().Set(Ybar[i])
-
-                tb.Reset() //Buffer Reset
-                Xbar[i].MarshalTo(&tb)
-                resp.R[i] = make([]byte, len(tb.Bytes()))
-                copy(resp.R[i][:], tb.Bytes()) //Convert to bytes
-
-                tb.Reset() //Buffer Reset
-                Ybar[i].MarshalTo(&tb)
-                resp.C[i] = make([]byte, len(tb.Bytes()))
-                copy(resp.C[i][:], tb.Bytes()) //Convert to bytes
-            }
-
-            //Convert to Bytes
-            resp1, _ := proto.Marshal(resp)
-
-            //Broadcast Shuffled Counters
-            broadcastData(step_no, cp_no, resp1)
-
-        } else if step_no == s_no + 5 { //If Step Number is 5
-
-            s := make([]abstract.Scalar, b+n) //Randomness for Re-Encryption
-            q := make([]abstract.Scalar, b+n) //Randomness for Re-Randomization
-
-            //Iterate over all Counters
-            for i := 0; i < b+n; i++ {
-
-                s[i] = suite.Scalar().Pick(pseudorand) //Pick a Random Scalar
-                q[i] = suite.Scalar().Zero()
-
-                for q[i].Equal(suite.Scalar().Zero()) == true {
-                    q[i] = suite.Scalar().Pick(pseudorand) //Set Exponent to Non-Zero Random Scalar
-                }
-            }
-
-            prf, Xbar, Ybar, _ := rerandomizeProofBatch(suite, R, C, nil, Y, s, q) //Re-Randomization
-
-            //Assign to Output Vector and Convert to Bytes
-            resp.R = make([][]byte, b+n)
-            resp.C = make([][]byte, b+n)
-            resp.Proof = make([][]byte, 1)
-
-            //Iterate over all Counters
-            for i := 0; i < b+n; i++ {
-
-                //Change its input as Rerandomized Output for Next Verification
-                R[i] = suite.Point().Set(Xbar[i])
-                C[i] = suite.Point().Set(Ybar[i])
-
-                tb.Reset() //Buffer Reset
-                Xbar[i].MarshalTo(&tb)
-                resp.R[i] = make([]byte, len(tb.Bytes()))
-                copy(resp.R[i][:], tb.Bytes()) //Convert to bytes
-
-                tb.Reset() //Buffer Reset
-                Ybar[i].MarshalTo(&tb)
-                resp.C[i] = make([]byte, len(tb.Bytes()))
-                copy(resp.C[i][:], tb.Bytes()) //Convert to bytes
-            }
-
-            //Convert Proof to Bytes
-            tb.Reset()
-            suite.Write(&tb, prf)
-            resp.Proof[0] = make([]byte, len(tb.Bytes()))
-            copy(resp.Proof[0][:], tb.Bytes())
-
-            //Convert to Bytes
-            resp1, _ := proto.Marshal(resp)
-
-            //Broadcast Re-randomized Counters
-            broadcastData(step_no, cp_no, resp1)
-
-        }  else if step_no == s_no + 6 { //If Step Number is 6
-
-            u := make([]abstract.Scalar, b+n) //Secret for Decryption
-            p := make([]abstract.Point, b+n) //Base Vector
-
-            //Iterate over all Counters
-            for i := 0; i < b+n; i++ {
-
-                u[i] = suite.Scalar().Set(x) //Set Secret for Decryption
-                p[i] = suite.Point().Base()
-            }
-            prf, _, Ybar, _ := proof.NewDLEQProofBatch(suite, p, R, u) //Decryption
-
-            //Assign to Output Vector and Convert to Bytes
-            resp.R = make([][]byte, b+n)
-            resp.C = make([][]byte, b+n)
-            resp.Proof = make([][]byte, 1)
-
-            //Iterate over all Counters
-            for i := 0; i < b+n; i++ {
-
-                //Change its input as Decrypted Output for Next Verification
-                C[i].Sub(C[i], Ybar[i])
-
-                tb.Reset() //Buffer Reset
-                R[i].MarshalTo(&tb)
-                resp.R[i] = make([]byte, len(tb.Bytes()))
-                copy(resp.R[i][:], tb.Bytes()) //Convert to bytes
-
-                tb.Reset() //Buffer Reset
-                C[i].MarshalTo(&tb)
-                resp.C[i] = make([]byte, len(tb.Bytes()))
-                copy(resp.C[i][:], tb.Bytes()) //Convert to bytes
-            }
-
-            //Convert Proof to Bytes
-            tb.Reset()
-            suite.Write(&tb, prf)
-            resp.Proof[0] = make([]byte, len(tb.Bytes()))
-            copy(resp.Proof[0][:], tb.Bytes())
-
-            //Convert to Bytes
-            resp1, _ := proto.Marshal(resp)
-
-            fmt.Println("Sending bcast")
-            //Broadcast Decrypted Counters
-            broadcastData(step_no, cp_no, resp1)
-            fmt.Println("Sent bcast")
-        }
-
-        fmt.Println("Inside CP Bcast b4",step_no-s_no, b_flag, cp_bcast, m_flag)
-
-        //If Step No. 0
-        if step_no == 0 {
-
-            step_no = s_no + 1 //Set Step No.
-
-        } else {
-
-            nxt_cp := 0 //Next CP
-
-            //If Last CP
-            if cp_bcast == no_CPs {
-
-                //If Step No. is not 6
-                if step_no != s_no + 6 {
-
-                    step_no += 1 //Start Next Step Broadcast
-                    cp_bcast = 1 //Set CP1 as Broadcasting CP
-
-                    nxt_cp = 1 //Set next CP
-
-                } else {
-
-                    f_flag = true //Set Finish Flag
-                }
-
-            } else {
-
-                //If Step No. is not 3
-                if step_no != s_no + 3 {
-
-                    cp_bcast += 1 //Set Broadcasting CP as next CP
-
-                    nxt_cp = cp_bcast //Set next CP
-
-                } else {
-                    
-                    //If Message flag set
-                    if m_flag == true { 
-
-                        cp_bcast += 1 //Set Broadcasting CP as next CP
-
-                        nxt_cp = cp_bcast //Set next CP
-                    
-                    } else {
-
-                        nxt_cp = -1 //Tag that message flag is not set
-                    }
-                }
-            }
-
-            //Set Broadcast Flag of Next CP to True
-            if cp_no == nxt_cp {
-
-                b_flag = true
-
-            } else if nxt_cp != -1 { //If not tagged
-
-                b_flag = false
-            }
-        }
-
-        //If Step No. 1
-        if cp_bcast == cp_no && b_flag == true {
-                
-            //CP1 broadcasts data
-            go broadcastCPData(cp_no, x, pub)
-            fmt.Println("CP BCast No. of goroutines",  runtime.NumGoroutine())
-        }
-    }
-
-    fmt.Println("Inside CP Bcast aft",step_no-s_no, b_flag, cp_bcast, m_flag)
-
-    mutex.Unlock() //Unlock mutex
-
-    fmt.Println("Bcast Mutex Unlock")
+    sendDataToDest(resp1, cp_no) 
 }
 
 /*//Input: Client Socket Channel, CP number, CP private key, CP public key
@@ -834,12 +488,12 @@ func handleClients(clients chan net.Conn, cp_no int, x abstract.Scalar, pub *Sch
 //Input: Command-line Arguments
 //Output: No. of CPs, No. of DPs
 //Function: Parse Command-line Arguments
-func parseCommandline(arg []string) (uint, uint) {
+func parseCommandline(arg []string) (int, int) {
 
-    var no_CPs, no_DPs uint
+    var no_CPs, no_DPs int
 
-    flag.UintVar(&no_CPs, "c", 5, "Number of CPs")
-    flag.UintVar(&no_DPs, "d", 20, "Number of DPs")
+    flag.IntVar(&no_CPs, "c", 5, "Number of CPs")
+    flag.IntVar(&no_DPs, "d", 20, "Number of DPs")
     flag.Parse()
 
     return no_CPs, no_DPs
@@ -847,7 +501,7 @@ func parseCommandline(arg []string) (uint, uint) {
 
 //Input: Data, Destination
 //Function: Send Data to Destination
-func sendDataToDest(data []byte, src int, dst int) {
+func sendDataToDest(data []byte, dst string) {
 
     //Load Private Key and Certificate
     cert, err := tls.LoadX509KeyPair("certs/TS.cert", "private/TS.key")
@@ -859,8 +513,15 @@ func sendDataToDest(data []byte, src int, dst int) {
     caCertPool.AppendCertsFromPEM(caCert)
 
     //Dial TCP Connection
-    config := tls.Config{Certificates: []tls.Certificate{cert}, RootCAs: caCertPool, InsecureSkipVerify: true} //ServerName: "CP" + strconv.Itoa(dst),}
-    con,err := net.Dial("tcp", "localhost:606" + strconv.Itoa(dst))
+    config := tls.Config{Certificates: []tls.Certificate{cert}, RootCAs: caCertPool, InsecureSkipVerify: true} //ServerName: dst,}
+    if (dst == "DP") {
+
+        con,err := net.Dial("tcp", "localhost:7100")
+
+    } else {
+
+        con,err := net.Dial("tcp", "localhost:6100")
+    }
     checkError(err)
 
     //Convert to TLS Connection
@@ -873,6 +534,29 @@ func sendDataToDest(data []byte, src int, dst int) {
     data = append(l, data...) //Append length to data
     _, err = conn.Write(data) //Send Data to Destination
     checkError(err)
+}
+
+//Input: Client common name, Listener
+//Output: Socket
+//Function: Accept new connections in  Socket
+func acceptConnections(cn string, listener net.Listener) *tls.Conn {
+    //Create Server Socket
+    cert, err := tls.LoadX509KeyPair("certs/"+ cn +".cert", "private/" + cn + ".key")
+    checkError(err)
+    
+    //Add CA certificate to pool
+    caCert, _ := ioutil.ReadFile("../CA/certs/ca.cert")
+    caCertPool := x509.NewCertPool()
+    caCertPool.AppendCertsFromPEM(caCert)
+    
+    //Create TLS Listener and Accept Connection
+    config := tls.Config{Certificates: []tls.Certificate{cert}, ClientCAs: caCertPool, ClientAuth: tls.RequireAndVerifyClientCert,}
+    conn, err := listener.Accept()
+    file, err := conn.(*net.TCPConn).File()
+    err = syscall.SetsockoptInt(int(file.Fd()), syscall.SOL_SOCKET, syscall.SO_REUSEADDR, 1)
+    sock := tls.Server(conn, &config)
+        
+    return sock
 }
 
 //Input: Socket, Number of Bytes
@@ -895,7 +579,7 @@ func receiveData(conn net.Conn) []byte {
     return msg_buf
 }
 
-//Input: CP Name, Port No.
+//Input: Port No.
 //Output: Server Socket
 //Function: Creates Server Socket
 func createServer(port string) net.Listener {
