@@ -1,3 +1,4 @@
+
 /*
 Created on Apr 18, 2017
 
@@ -14,105 +15,230 @@ import (
     "fmt"
     //"github.com/dedis/crypto/abstract"
     //"github.com/dedis/crypto/nist"
-    //"github.com/golang/protobuf/proto"
+    "github.com/golang/protobuf/proto"
     "io"
     "io/ioutil"
+    "math"
+    "math/rand"
     "net"
     "os"
-    //"PSC/TS/tsres"
-    "strconv"
-    //"sync"
+    "PSC/TS/tssig"
+    "PSC/TS/tsconfig"
+    "runtime"
+    //"strconv"
+    "sync"
     "syscall"
+    "time"
 )
 
-var cp_bcast int //CP Number Broadcasting
-var step_no uint32 //Step Number
-var s_no uint32 //Session No.
+var no_CPs = 5 //No.of CPs
+var no_DPs = 20 //No. of DPs
+var no_Expts = 3 //No. of measurements
+var cp_hname = []string{"CP1", "CP2", "CP3", "CP4", "CP5"} //CP hostnames
+var dp_hname = []string{"DP1", "DP1", "DP1", "DP1", "DP1", "DP1", "DP1", "DP1", "DP1", "DP1", "DP1", "DP1", "DP1", "DP1", "DP1", "DP1", "DP1", "DP1", "DP1", "DP1"} //DP hostnames
+var cp_ips = []string{"10.176.5.17", "10.176.5.17", "10.176.5.17", "10.176.5.17", "10.176.5.17"}; //CP IPs
+var dp_ips = []string{"10.176.5.17", "10.176.5.17", "10.176.5.17", "10.176.5.17", "10.176.5.17", "10.176.5.17", "10.176.5.17", "10.176.5.17", "10.176.5.17", "10.176.5.17", "10.176.5.17", "10.176.5.17", "10.176.5.17", "10.176.5.17", "10.176.5.17", "10.176.5.17", "10.176.5.17", "10.176.5.17", "10.176.5.17", "10.176.5.17"}; //DP IPs
+var cp_bcast int //Next CP to broadcast
+var cp_s_no uint32 //CP session No.
+var cp_step_no uint32 //Step Number
+var dp_step_no uint32 //Step Number
+var dp_s_no uint32 //DP session No.
+var no_cp_res int = 0 //No. of CPs responded
+var b_flag bool //Broadcast Flag
+var mutex = &sync.Mutex{} //Mutex to lock common client variable
 
 func main() {
 
-    //Set Step No.
-    step_no = 0
-
-    //Set Broadcasting CP
-    cp_bcast = 1
-
-    seed := rand.NewSource(time.Now().UnixNano())
-    rnd := rand.New(seed)
-
-    s_no = 0
-    for s_no == 0 {
-        s_no = uint32(rnd.Int31()) //Set Session No. to Non-Zero Random Number
-    }
-
-    no_CPs, no_DPs := parseCommandline(os.Args) //Parse number of CPs and DPs
-     
-    fmt.Println("Started Tally Server")
-
     //Listen to the TCP port
     sock := createServer("5100")
-    fmt.Println("No. of CPs, DPs", no_CPs, no_DPs, sock)
 
-    //Signal CP1 to broadcast data
-    go broadcastCPData(cp_bcast)
-    fmt.Println("CP BCast No. of goroutines",  runtime.NumGoroutine())
+    fmt.Println("Started Tally Server")
+
+    epsilon, delta := parseCommandline(os.Args) //Parse privacy parameters - epsilon and delta
+
+    expt_no := 0 //Set measurement no. to 0
+    f_flag := true //Finish Flag
 
     for{
 
-        /*mutex.Lock() //Lock mutex
+        expt_no = expt_no + 1 //Increment measurement no.
 
-        if f_flag == true { //If finish flag set
+        if f_flag == true && expt_no < no_Expts { //Continue measurements
 
-            fmt.Println("finish")
-            break
+            f_flag = false //Set finish flag to false
+   
+            seed := rand.NewSource(time.Now().UnixNano())
+            rnd := rand.New(seed)
 
-        }
+            //Generate CP session no.
+            cp_s_no = 0
+            for cp_s_no == 0 {
 
-        mutex.Unlock() //Unlock mutex
+                cp_s_no = uint32(rnd.Int31()) //Set session no. to non-zero random number
+            }
 
-        fmt.Println("I am waiting", runtime.NumGoroutine())
-
-        if conn := acceptConnections(cp_no, sock); conn != nil { //If Data is available
-
-            //Handle connections in separate channels
-            go handleClients(clients, cp_no, x, pub)
-
-            fmt.Println("Handle Client No. of goroutines",  runtime.NumGoroutine())
-
-            //Handle each client in separate channel
-            clients <- conn
+            //Generate DP session no.
+            dp_s_no = 0
+            for dp_s_no == 0 {
         
-        }*/
+                dp_s_no = uint32(rnd.Int31()) //Set session no. to non-Zero random number
+            }
+     
+            //PSC configuration to send to CPs
+            config := new(TSconfig.Config)
+            config.SNo = proto.Int32(int32(cp_s_no))
+            config.Epsilon = proto.Float32(float32(epsilon))
+            config.Delta = proto.Float32(float32(delta))
+            config.Ncps = proto.Int32(int32(no_CPs))
+            config.CPhname = make([]string, no_CPs)
+            config.CPips = make([]string, no_CPs)
+    
+            for i := 0; i < no_CPs; i++ {
+
+                config.CPhname[i] = cp_hname[i]
+                config.CPips[i] = cp_ips[i]
+            }
+    
+            config.Ndps = proto.Int32(int32(no_DPs))
+            config.DPhname = make([]string, no_DPs) 
+            config.DPips = make([]string, no_DPs)
+
+            for i := 0; i < no_DPs; i++ {
+
+                config.DPhname[i] = dp_hname[i]
+         	config.DPips[i] = dp_ips[i]
+            }
+
+            //Convert to Bytes
+            configbytes, _ := proto.Marshal(config)
+
+            //Send config to CPs
+            for i := 0; i < no_CPs; i++ {
+
+                continue
+                //sendDataToDest(configbytes, cp_hname[i], cp_ips[i])
+            }
+    
+            //PSC configuration to send to DPs
+            config.SNo = proto.Int32(int32(dp_s_no))
+
+            //Convert to Bytes
+            configbytes, _ = proto.Marshal(config)
+
+            //Send config to DPs
+            for i := 0; i < no_DPs; i++ {
+
+                continue
+     	        //sendDataToDest(configbytes, dp_hname[i], dp_ips[i])
+            }
+
+            //Channel to send finish flag
+            finish := make(chan bool)
+
+            b_flag = false //Set broadcast flag to false
+            dp_s_no = dp_s_no + 1 //Increment DP session no.
+
+            //Send signal to DPs to share Symmetric keys with the CPs
+            for i := 0; i < no_CPs; i++ {
+
+                continue
+                //signalPartytoBcast(dp_hname[i], dp_ips[i], finish)
+            }
+
+            //Channel to handle simultaneous connections
+            clients := make(chan net.Conn)
+
+            fmt.Println(sock, configbytes)
+
+            for{
+
+                f_flag = <-finish
+    
+                if f_flag == true { //If finish flag set
+                    
+                    fmt.Println("Finished measurement no. ", expt_no)
+                    break
+                }
+
+                fmt.Println("I am waiting", runtime.NumGoroutine())
+
+                if conn := acceptConnections(sock); conn != nil { //If Data is available
+
+                    //Handle connections in separate channels
+                    go handleClients(clients, finish)
+
+                    fmt.Println("Handle Client No. of goroutines", runtime.NumGoroutine())
+
+                    //Handle each client in separate channel
+                    clients <- conn        
+                }
+            }
+
+        } else {
+ 
+            var quit string //Continue response
+
+            fmt.Println("Do you want to quit? (Y or N)")
+            fmt.Scanf("%s", &quit)
+
+            if quit == "N" || quit == "n" { //If continue with same parameters
+               
+                fmt.Println("Enter no. of experiments")
+                fmt.Scanf("%d", &no_Expts) 
+
+                expt_no = 0 //Reset measurement no.
+            }
+        }
+    }   
+}
+
+//Input: Party (CP/DP) hostname, Party (CP/DP) IP, Finish flag channel
+//Function: Signal next Party to broadcast
+func signalPartytoBcast(party_hname, party_ip string, finish chan bool) {
+
+    mutex.Lock() //Lock mutex
+
+    sig := new(TSsig.Signal) //TS signal for next broadcast party
+
+    sig.Fflag = proto.Bool(false) //Set TS signal finish flag to false
+
+    //Set TS signal session no.
+    if contains(cp_hname, party_hname) {
+
+        sig.SNo = proto.Int32(int32(cp_s_no))
+        sig.StepNo = proto.Int32(int32(cp_step_no))
+   
+    } else if contains(dp_hname, party_hname) {
+
+        sig.SNo = proto.Int32(int32(dp_s_no))
+        sig.StepNo = proto.Int32(int32(dp_step_no))
+
+    } else {
+
+        sig.Fflag = proto.Bool(true) //Set TS signal finish flag to true
+        finish <- true //Error: Set TS finish flag
     }
+
+    if *sig.Fflag == false {
+
+        //Set TS signal broadcast flag
+        sig.Bflag = proto.Bool(true)
+
+        //Convert to Bytes
+        sigb, _ := proto.Marshal(sig)
+
+        //Send signal to next broadcast party
+        sendDataToDest(sigb, party_hname, party_ip)
+     }
+
+    mutex.Unlock() 
 }
 
-//Input: CP number
-//Function: Signal next CP to broadcast
-func broadcastCPData(cp_no int) {
-
-    var tb bytes.Buffer //Temporary Buffer
-    resp := new(TSres.Response)
-
-    //Set TS response step no.
-    resp.s_no = step_no - s_no
-
-    //Set TS response CP no.
-    resp.c_no = cp_no
-
-    //Set TS response broadcast flag
-    resp.c_no = true
-
-    //Convert to Bytes
-    resp1, _ := proto.Marshal(resp)
-
-    sendDataToDest(resp1, cp_no) 
-}
-
-/*//Input: Client Socket Channel, CP number, CP private key, CP public key
+//Input: Client Socket Channel, Finish flag channel
 //Function: Handle client connection 
-func handleClients(clients chan net.Conn, cp_no int, x abstract.Scalar, pub *Schnorrkey.Pub) {
+func handleClients(clients chan net.Conn, finish chan bool) {
 
-    //Wait for next client connection to come off queue.
+    /*//Wait for next client connection to come off queue.
     conn := <-clients
 
     mutex.Lock() //Lock mutex
@@ -125,7 +251,7 @@ func handleClients(clients chan net.Conn, cp_no int, x abstract.Scalar, pub *Sch
     com_name := parseCommonName(conn)
 
     //If Data Received from DP
-    if com_name[0:len(com_name)-1] == "DP" {
+    if contains(dp_hname, com_name) {
 
         //Parse DP Response
         resp := new(DPres.Response)
@@ -157,275 +283,43 @@ func handleClients(clients chan net.Conn, cp_no int, x abstract.Scalar, pub *Sch
         }
              
     } else if com_name[0:len(com_name)-1] == "CP" {
+                
+        ts_resp := new(TSres.Response) //CP Response
 
         src,_ := strconv.Atoi(com_name[len(com_name)-1:]) //No. of CP that sent
+
+        
     
-        //Verify Sign
-        l, f := verifyCPSign(suite, src, buf)
+        //Verify Step No., CP No. and TS broadcast flag
+	if ts_resp.S_no == 0 { //Step No. 0
 
-        //Step No. in Message
-        t := binary.BigEndian.Uint32(buf[1:5])
+            //Set CP1 to broadcast and broadcast flag to false
+	    cp_bcast = 1
+	    b_flag = false
 
-        fmt.Println("Handle Client Inside CP", runtime.NumGoroutine(), com_name, step_no-s_no, t==step_no, b_flag, cp_bcast)
+            //Signal next CP to broadcast data
+            go broadcastCPData(cp_bcast) 
 
-        //If Step No. and Signature Verified
-        if t == step_no && f == true {
+        } else if ts_resp.S_no == step_no - s_no + 1 && ts_resp.c_no == cp_bcast && ts_resp.f == b_flag {
 
-            //If Broadcast Flag Set
-            if uint8(buf[0]) == 1 {
+            //Set broadcast flag to false
+            b_flag = false
 
-                if no_cp_res != 0 { //If not the 1st broadcasted message
+            //Signal next CP to broadcast data
+            go broadcastCPData(cp_bcast)
 
-                    //Compare Signatures
-                    if bytes.Compare(buf[9:9+l], b_j[no_cp_res - 1]) != 0 { //If signatures don't match
+        } else if ts_resp.s_no == step_no - s_no + 1 && ts_resp.c_no != cp_bcast && ts_resp.f == b_flag {
 
-                        fmt.Print("Signatures Not Matching")
-                        os.Exit(0)
-                    }
-                }
-                             
-	        b_j[no_cp_res] = buf[9:9+l] //Store Signed Message
-                proto.Unmarshal(buf[9+l:], cp_resp) //Store Message
+	    
 
-                r_index = no_cp_res
-                r_cp_bcast = cp_bcast
-                r_flag = true
+	} else { //Wrong acknowledgement
 
-            } else if uint8(buf[0]) == 0 { //If Broadcast Flag not Set
-
-                if no_cp_res != 0 { //If not the 1st broadcasted message
-
-                    //Compare Signatures      
-                    if bytes.Compare(buf[9+l:], b_j[no_cp_res - 1]) != 0 { //If signatures don't match
-
-                        fmt.Print("Signatures Not Matching")
-                        os.Exit(0)
-                    }
-                }
-
-                b_j[no_cp_res] = buf[9+l:] //Store Signed Message
-            }
-
-            no_cp_res += 1 //Increment No. of CP Responses
-
-        } else if f != true { //If Signature not verified
-
-            fmt.Print("Signature Not Verified")
+            fmt.Print("Wrong Acknowledgement")
             os.Exit(0)
         } 
 
-        //If All CPs have finished Broadcasting/Re-Broadcasting
+        //If All CPs have finished Re-Broadcasting
         if no_cp_res == no_CPs - 1 {
-
-            //If Step No. is 0
-            if step_no == 0 {
-
-                s_no = binary.BigEndian.Uint32(cp_resp.R[0]) //Set Session No.
-
-            } else if step_no == s_no + 1 { //If Step No. is 1
-
-                tmp := bytes.NewReader(cp_resp.R[0]) //Temporary
-                y[cp_bcast - 1] = suite.Point()
-                y[cp_bcast - 1].UnmarshalFrom(tmp)
-
-                //Verify Proof
-                rep := proof.Rep("X", "x", "B")
-                public := map[string]abstract.Point{"B": suite.Point().Base(), "X": y[cp_bcast - 1]}
-                verifier := rep.Verifier(suite, public)
-                err := proof.HashVerify(suite, strconv.Itoa(int(step_no)), verifier, cp_resp.Proof[0])
-
-                //If Error in Verifying
-                if err != nil {
-		    fmt.Println("Step 1 Proof Not Verified")
-                    os.Exit(0)
-                }
-
-                //Multiply to create Compound Public Key
-                Y.Add(Y, y[cp_bcast - 1])
-
-            } else if step_no == s_no + 2 { //If Step No. 2
-
-                //Convert Bytes to Data
-                for i := 0; i < n; i++ {
-
-                    tmp := bytes.NewReader(cp_resp.R[2*i]) //Temporary
-                    nr_o[i][0] = suite.Point()
-                    nr_o[i][0].UnmarshalFrom(tmp) //Assign Shuffled Noise Elgamal Blinding Factors
-
-                    tmp = bytes.NewReader(cp_resp.R[(2*i)+1]) //Temporary
-                    nr_o[i][1] = suite.Point()
-                    nr_o[i][1].UnmarshalFrom(tmp) //Assign Shuffled Noise Elgamal Blinding Factors
-
-                    tmp = bytes.NewReader(cp_resp.C[2*i]) //Temporary
-                    nc_o[i][0] = suite.Point()
-                    nc_o[i][0].UnmarshalFrom(tmp) //Assign Shuffled Noise Elgamal Ciphers
-
-                    tmp = bytes.NewReader(cp_resp.C[(2*i)+1]) //Temporary
-                    nc_o[i][1] = suite.Point()
-                    nc_o[i][1].UnmarshalFrom(tmp) //Assign Shuffled Noise Elgamal Ciphers
-
-                    //Verify Proof
-                    verifier := shuffle.BiffleVerifier(suite, nil, Y, nr[i], nc[i], nr_o[i], nc_o[i])
-                    err := proof.HashVerify(suite, strconv.Itoa(int(step_no))+strconv.Itoa(i), verifier, cp_resp.Proof[i])
-
-                    //If Not Verified
-                    if err != nil {
-                        fmt.Println("Step 2 Proof Not Verified")
-                        os.Exit(0)
-                    }
-                }
-                                
-                //Iterate over all Noise Counters
-                for i := 0; i < n; i++ {
-
-                    //Swap Current Output as Input
-                    nr[i][0] = suite.Point().Set(nr_o[i][0])
-                    nr[i][1] = suite.Point().Set(nr_o[i][1])
-                    nc[i][0] = suite.Point().Set(nc_o[i][0])
-                    nc[i][1] = suite.Point().Set(nc_o[i][1])
-                }
-
-                //If Last CP has Broadcasted
-                if cp_bcast == no_CPs {
-
-                    //Iterate Over all Noise Counters
-                    for i := b; i < b+n; i++ {
-
-                        //Select 1st Coin as Noise
-                        R[i] = suite.Point().Set(nr[i-b][0])
-                        C[i] = suite.Point().Set(nc[i-b][0])
-                    }
-                }
-
-            } else if step_no == s_no + 3 { //If Step No. 3
-
-                //Convert Bytes to Data
-                for i := 0; i < b; i++ {
-
-                    tmp := bytes.NewReader(cp_resp.R[i]) //Temporary
-                    tp := suite.Point() //Temporary
-                    tp.UnmarshalFrom(tmp)
-                    R[i].Add(R[i], tp) //Multiply Elgamal Blinding Factors
-
-                    //Verify Proof
-                    rep := proof.Rep("X", "x", "B")
-                    public := map[string]abstract.Point{"B": suite.Point().Base(), "X": tp}
-                    verifier := rep.Verifier(suite, public)
-                    err := proof.HashVerify(suite, strconv.Itoa(int(step_no))+strconv.Itoa(i), verifier, cp_resp.Proof[i])
-
-                    //If Error in Verifying
-                    if err != nil {
-                        fmt.Println("Step 3 Proof Not Verified")
-                        os.Exit(0)
-                    }
-
-                    tmp = bytes.NewReader(cp_resp.C[i])
-                    tp = suite.Point()
-                    tp.UnmarshalFrom(tmp)
-                    C[i].Add(C[i], tp) //Multiply Elgamal Ciphers
-                }
-
-            } else if step_no == s_no + 4 { //If Step No. 4
-
-                //Convert Bytes to Data
-                for i := 0; i < b+n; i++ {
-
-                    tmp := bytes.NewReader(cp_resp.R[i]) //Temporary
-                    R_O[i] = suite.Point()
-                    R_O[i].UnmarshalFrom(tmp) //Assign Shuffled Elgamal Blinding Factors
-
-                    tmp = bytes.NewReader(cp_resp.C[i]) //Temporary
-                    C_O[i] = suite.Point()
-                    C_O[i].UnmarshalFrom(tmp) //Assign Shuffled Elgamal Ciphers
-                }
-
-                //Verify Proof
-                verifier := shuffle.Verifier(suite, nil, Y, R, C, R_O, C_O)
-                err := proof.HashVerify(suite, strconv.Itoa(int(step_no)), verifier, cp_resp.Proof[0][:])
-
-                //If not verified
-                if err != nil {
-                    fmt.Println("Step 4 Proof Not Verified")
-                    os.Exit(0)
-                }
-
-                //Iterate over all Counters
-                for i := 0; i < b+n; i++ {
-
-                    //Swap Current Output as Input
-                    R[i] = suite.Point().Set(R_O[i])
-                    C[i] = suite.Point().Set(C_O[i])
-                }
-                    
-            } else if step_no == s_no + 5 { //If Step No. 5
-
-                prf := make([]*ReRandomizeProof, b+n)
-                tmp := bytes.NewReader(cp_resp.Proof[0])
-                suite.Read(tmp, prf)
-
-                //Convert Bytes to Data
-                for i := 0; i < b+n; i++ {
-
-                    tmp = bytes.NewReader(cp_resp.R[i]) //Temporary
-                    R_O[i] = suite.Point()
-                    R_O[i].UnmarshalFrom(tmp) //Assign Re-Randomized Elgamal Blinding Factors
-
-                    tmp = bytes.NewReader(cp_resp.C[i]) //Temporary
-                    C_O[i] = suite.Point()
-                    C_O[i].UnmarshalFrom(tmp) //Assign Re-Randomized Elgamal Ciphers
-
-                    //Verify Proof
-                    err := prf[i].Verify(suite, R[i], C[i], nil, Y, R_O[i], C_O[i])
-
-                    //If not verified
-                    if err != nil || R_O[i].Equal(suite.Point().Base()) == true || C_O[i].Equal(suite.Point().Base()) == true {
-                        fmt.Println("Step 5 Proof Not Verified")
-                        os.Exit(0)
-                    }
-                }
-
-                //Iterate over all Counters
-                for i := 0; i < b+n; i++ {
-
-                    //Swap Current Output as Input
-                    R[i] = R_O[i]
-                    C[i] = C_O[i]
-                }
-
-            } else if step_no == s_no + 6 { //If Step No. 6
-
-                prf := make([]*proof.DLEQProof, b+n)
-                tmp := bytes.NewReader(cp_resp.Proof[0])
-                suite.Read(tmp, prf)
-
-                //Convert Bytes to Data
-                for i := 0; i < b+n; i++ {
-
-                    tmp := bytes.NewReader(cp_resp.R[i]) //Temporary
-                    R_O[i] = suite.Point()
-                    R_O[i].UnmarshalFrom(tmp) //Assign Re-Randomized Elgamal Blinding Factors
-
-                    tmp = bytes.NewReader(cp_resp.C[i])  //Temporary
-                    C_O[i] = suite.Point()
-                    C_O[i].UnmarshalFrom(tmp) //Assign Re-Randomized Elgamal Ciphers
-
-                    //Verify Proof
-                    err := prf[i].Verify(suite, nil, R[i], y[cp_bcast - 1], suite.Point().Sub(C[i], C_O[i]))
-
-                    //If not verified
-                    if err != nil {
-                        fmt.Println("Step 6 Proof Not Verified")
-                        os.Exit(0)
-                    }
-                }
-                                
-                //Iterate over all Counters
-                for i := 0; i < b+n; i++ {
-
-                    //Swap Current Output as Input
-                    C[i] = C_O[i]
-                }
-            }
 
             //If Step No. 0
             if step_no == 0 {
@@ -482,26 +376,27 @@ func handleClients(clients chan net.Conn, cp_no int, x abstract.Scalar, pub *Sch
         sendDataN_1(step_no, r_cp_bcast, cp_no, b_j[r_index]) //Re-Broadcasting
     }
 
-    fmt.Println("Handle Client Mutex Unlock", runtime.NumGoroutine())
-}*/
+    fmt.Println("Handle Client Mutex Unlock", runtime.NumGoroutine())*/
+}
 
 //Input: Command-line Arguments
 //Output: No. of CPs, No. of DPs
 //Function: Parse Command-line Arguments
-func parseCommandline(arg []string) (int, int) {
+func parseCommandline(arg []string) (float64, float64) {
 
-    var no_CPs, no_DPs int
+    var epsilon, delta float64
 
-    flag.IntVar(&no_CPs, "c", 5, "Number of CPs")
-    flag.IntVar(&no_DPs, "d", 20, "Number of DPs")
+    flag.Float64Var(&epsilon, "e", 0.3, "Privacy parameter epsilon")
+    flag.Float64Var(&delta, "", math.Pow(10, -12), "Privacy parameter delta")
+
     flag.Parse()
 
-    return no_CPs, no_DPs
+    return epsilon, delta
 }
 
-//Input: Data, Destination
+//Input: Data, Destination hostname, Destination ip
 //Function: Send Data to Destination
-func sendDataToDest(data []byte, dst string) {
+func sendDataToDest(data []byte, dst_hname string, dst_ip string) {
 
     //Load Private Key and Certificate
     cert, err := tls.LoadX509KeyPair("certs/TS.cert", "private/TS.key")
@@ -513,15 +408,18 @@ func sendDataToDest(data []byte, dst string) {
     caCertPool.AppendCertsFromPEM(caCert)
 
     //Dial TCP Connection
-    config := tls.Config{Certificates: []tls.Certificate{cert}, RootCAs: caCertPool, InsecureSkipVerify: true} //ServerName: dst,}
-    if (dst == "DP") {
+    config := tls.Config{Certificates: []tls.Certificate{cert}, RootCAs: caCertPool, ServerName: dst_hname,}
+    sock := ""
+    if (dst_hname == "DP") {
 
-        con,err := net.Dial("tcp", "localhost:7100")
+        sock = dst_ip+":7100"
 
     } else {
 
-        con,err := net.Dial("tcp", "localhost:6100")
+        sock = dst_ip+":6100"
     }
+
+    con,err := net.Dial("tcp", sock)
     checkError(err)
 
     //Convert to TLS Connection
@@ -539,9 +437,9 @@ func sendDataToDest(data []byte, dst string) {
 //Input: Client common name, Listener
 //Output: Socket
 //Function: Accept new connections in  Socket
-func acceptConnections(cn string, listener net.Listener) *tls.Conn {
+func acceptConnections(listener net.Listener) *tls.Conn {
     //Create Server Socket
-    cert, err := tls.LoadX509KeyPair("certs/"+ cn +".cert", "private/" + cn + ".key")
+    cert, err := tls.LoadX509KeyPair("certs/TS.cert", "private/TS.key")
     checkError(err)
     
     //Add CA certificate to pool
@@ -588,6 +486,22 @@ func createServer(port string) net.Listener {
     listener, _ := net.Listen("tcp", "localhost:" + port)
 
     return listener
+}
+
+//Input: Party list, Party name
+//Output: Boolean output
+//Function: Check if party in party list
+func contains(pl []string, p string) bool {
+
+    for _, party := range pl {
+      
+        if party == p {
+          
+            return true
+        }
+    }
+
+    return false
 }
 
 //Input: Error

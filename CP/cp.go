@@ -73,7 +73,6 @@ var R = make([]abstract.Point, b+n) //Product of all CP Elgamal Blinding Factors
 var C = make([]abstract.Point, b+n) //Product of all CP Elgamal Ciphers
 var R_O = make([]abstract.Point, b+n) //Shuffled Elgamal Blinding Factors
 var C_O = make([]abstract.Point, b+n) //Shuffled Elgamal Ciphers
-var cp_resp = new(CPres.Response) //CP Response
 var mutex = &sync.Mutex{} //Mutex to lock common client variable
 
 func main() {
@@ -632,6 +631,8 @@ func handleClients(clients chan net.Conn, cp_no int, x abstract.Scalar, pub *Sch
         }
              
     } else if com_name[0:len(com_name)-1] == "CP" {
+
+        cp_resp := new(CPres.Response) //CP Response
 
         src,_ := strconv.Atoi(com_name[len(com_name)-1:]) //No. of CP that sent
     
