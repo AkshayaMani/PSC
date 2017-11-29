@@ -1,0 +1,20 @@
+syntax = "proto2";
+package TSmsg;
+
+message Config {
+  required int32 SNo = 1;
+  required int32 Epoch = 2;
+  required float Epsilon = 3;
+  required float Delta = 4; 
+  required int32 Ncps = 5;
+  repeated string CPhname = 6;
+  repeated string CPips = 7;
+  required int32 Ndps = 8;
+  repeated string DPhname = 9;
+  repeated string DPips = 10;
+}
+
+message Signal {
+  required int32 SNo = 1;
+  required bool Fflag = 2;
+}
