@@ -1,5 +1,3 @@
-
-
 /*
 Created on Apr 18, 2017
 
@@ -14,8 +12,6 @@ import (
     "encoding/binary"
     "flag"
     "fmt"
-    //"github.com/dedis/crypto/abstract"
-    //"github.com/dedis/crypto/nist"
     "github.com/golang/protobuf/proto"
     "io"
     "io/ioutil"
@@ -24,53 +20,59 @@ import (
     "net"
     "os"
     "PSC/TS/tsmsg"
-    "runtime"
-    //"strconv"
     "sync"
     "syscall"
     "time"
 )
 
-var no_CPs = 5 //No.of CPs
-var no_DPs = 20 //No. of DPs
-var no_Expts = 3 //No. of measurements
+const no_CPs = 5 //No.of CPs
+const no_DPs = 3 //No. of DPs
+const b = 200000 //Hash table size
+var no_Expts = 2 //No. of measurements
 var cp_hname = []string{"CP1", "CP2", "CP3", "CP4", "CP5"} //CP hostnames
-var dp_hname = []string{"DP1", "DP1", "DP1", "DP1", "DP1", "DP1", "DP1", "DP1", "DP1", "DP1", "DP1", "DP1", "DP1", "DP1", "DP1", "DP1", "DP1", "DP1", "DP1", "DP1"} //DP hostnames
-var cp_ips = []string{"10.176.5.17", "10.176.5.17", "10.176.5.17", "10.176.5.17", "10.176.5.17"}; //CP IPs
-var dp_ips = []string{"10.176.5.17", "10.176.5.17", "10.176.5.17", "10.176.5.17", "10.176.5.17", "10.176.5.17", "10.176.5.17", "10.176.5.17", "10.176.5.17", "10.176.5.17", "10.176.5.17", "10.176.5.17", "10.176.5.17", "10.176.5.17", "10.176.5.17", "10.176.5.17", "10.176.5.17", "10.176.5.17", "10.176.5.17", "10.176.5.17"}; //DP IPs
+var dp_hname = []string{"DP1", "DP2", "DP3"}//, "DP1", "DP1", "DP1", "DP1", "DP1", "DP1", "DP1", "DP1", "DP1", "DP1", "DP1", "DP1", "DP1", "DP1", "DP1", "DP1", "DP1"} //DP hostnames
+var cp_ips = []string{"10.176.5.20", "10.176.5.21", "10.176.5.22", "10.176.5.23", "10.176.5.24"} //CP IPs
+var dp_ips = []string{"10.176.5.17", "10.176.5.18", "10.176.5.19"}//, "10.176.5.17", "10.176.5.17", "10.176.5.17", "10.176.5.17", "10.176.5.17", "10.176.5.17", "10.176.5.17", "10.176.5.17", "10.176.5.17", "10.176.5.17", "10.176.5.17", "10.176.5.17", "10.176.5.17", "10.176.5.17", "10.176.5.17", "10.176.5.17", "10.176.5.17"} //DP IPs
+var ts_cname string //TS common name
 var epoch int //Epoch
-var epsilon float64 //Privacy parameter epsilon
-var delta float64 //Privacy parameter delta
-var sock net.Listener //Server listener
+var start time.Time //Data collection start time
+var ln net.Listener //Server listener
 var finish chan bool //Channel to send finish flag
 var f_flag bool //Finish flag
+var config_flag bool //Configuration flag
+var data_flag bool //Data flag
 var cp_bcast int //Next CP to broadcast
 var cp_step_no uint32 //CP Step Number
 var dp_step_no uint32 //DP Step Number
-var cp_s_no uint32 //CP session No.
-var dp_s_no uint32 //DP session No.
-var no_dp_res int = 0 //No. of DPs responded
-var no_cp_res int = 0 //No. of CPs responded
-var b_flag bool //Broadcast Flag
+var ts_s_no uint32 //TS session No.
+var no_dp_res int//No. of DPs responded
+var no_cp_res int//No. of CPs responded
 var mutex = &sync.Mutex{} //Mutex to lock common client variable
 var wg = &sync.WaitGroup{} //WaitGroup to wait for all goroutines to shutdown
 
 func main() {
 
-    parseCommandline(os.Args) //Parse epoch and privacy parameters - epsilon and delta
+    ts_ip, epsilon, delta := parseCommandline(os.Args) //Parse epoch, TS common name, TS IP and privacy parameters - epsilon and delta
 
     expt_no := 0 //Set measurement no. to 0
     
     for{
 
+        //Initialize global variables
+        initValues()
+
         //Listen to the TCP port
-        sock = createServer("5100")
+        ln, _ = net.Listen("tcp", ts_ip+":5100")
 
         fmt.Println("Started Tally Server")
 
         finish = make(chan bool) //Initialise finish channel
 
         f_flag = false //Set finish flag
+
+        no_dp_res = 0 //No. of DPs responded
+
+        no_cp_res = 0 //No. of CPs responded
 
         expt_no = expt_no + 1 //Increment measurement no.
 
@@ -79,45 +81,34 @@ func main() {
             seed := rand.NewSource(time.Now().UnixNano())
             rnd := rand.New(seed)
 
-            //Generate CP session no.
-            cp_s_no = 0
-            for cp_s_no == 0 {
+            //Generate TS session no.
+            ts_s_no = 0
+            for ts_s_no == 0 {
 
-                cp_s_no = uint32(rnd.Int31()) //Set session no. to non-zero random number
+                ts_s_no = uint32(rnd.Int31()) //Set session no. to non-zero random number
             }
 
-            //Generate DP session no.
-            dp_s_no = 0
-            for dp_s_no == 0 {
-        
-                dp_s_no = uint32(rnd.Int31()) //Set session no. to non-Zero random number
-            }
-     
-            //PSC configuration to send to CPs
+            //Assign PSC configuration to send to CPs
             config := new(TSmsg.Config)
-            config.SNo = proto.Int32(int32(cp_s_no))
+            config.SNo = proto.Int32(int32(ts_s_no))
             config.Epoch = proto.Int32(int32(epoch))
             config.Epsilon = proto.Float32(float32(epsilon))
             config.Delta = proto.Float32(float32(delta))
             config.Ncps = proto.Int32(int32(no_CPs))
             config.CPhname = make([]string, no_CPs)
             config.CPips = make([]string, no_CPs)
-    
-            for i := 0; i < no_CPs; i++ {
 
-                config.CPhname[i] = cp_hname[i]
-                config.CPips[i] = cp_ips[i]
-            }
+            copy(config.CPhname[:], cp_hname)
+            copy(config.CPips[:], cp_ips)
     
             config.Ndps = proto.Int32(int32(no_DPs))
             config.DPhname = make([]string, no_DPs) 
             config.DPips = make([]string, no_DPs)
 
-            for i := 0; i < no_DPs; i++ {
+            copy(config.DPhname[:], dp_hname)
+            copy(config.DPips[:], dp_ips)
 
-                config.DPhname[i] = dp_hname[i]
-         	config.DPips[i] = dp_ips[i]
-            }
+            config.Tsize = proto.Int64(int64(b))
 
             //Convert to Bytes
             configbytes, _ := proto.Marshal(config)
@@ -125,57 +116,46 @@ func main() {
             //Send config to CPs
             for i := 0; i < no_CPs; i++ {
 
-                continue
-                //sendDataToDest(configbytes, cp_hname[i], cp_ips[i])
+                sendDataToDest(configbytes, cp_hname[i], cp_ips[i]+":6100")
             }
     
-            //PSC configuration to send to DPs
-            config.SNo = proto.Int32(int32(dp_s_no))
-
-            //Convert to Bytes
-            configbytes, _ = proto.Marshal(config)
-
             //Send config to DPs
             for i := 0; i < no_DPs; i++ {
 
-                continue
-     	        //sendDataToDest(configbytes, dp_hname[i], dp_ips[i], false)
+     	        sendDataToDest(configbytes, dp_hname[i], dp_ips[i]+":7100")
             }
 
-            cp_step_no = cp_s_no //Set CP step no.
-            dp_step_no = dp_s_no //Set DP step no.
-
-            dp_step_no += 1 //Increment DP step no.
-            cp_step_no += 1 //Increment CP step no.
-
-            //Send signal to DPs to share Symmetric keys with the CPs
-            for i := 0; i < no_DPs; i++ {
-
-                signalPartytoBcast(dp_hname[i], dp_ips[i], false)
-            }
+            cp_step_no = ts_s_no //Set CP step no.
+            dp_step_no = ts_s_no //Set DP step no.
 
             //Channel to handle simultaneous connections
             clients := make(chan net.Conn)
-
-            fmt.Println(sock, configbytes)
 
             loop:
 
             for{
 
-                conn, err := acceptConnections(sock) //Accept connections
+                conn, err := acceptConnections() //Accept connections
 
                 if conn != nil { //If Data is available
 
-                    wg.Add(1)
+                    //Parse Common Name
+                    com_name := parseCommonName(conn)
 
-                    //Handle connections in separate channels
-                    go handleClients(clients)
+                    if contains(dp_hname, com_name) || contains(cp_hname, com_name) { //If CPs or DPs
 
-                    fmt.Println("Handle Client No. of goroutines", runtime.NumGoroutine())
+                        wg.Add(1) //Increment WaitGroup counter
 
-                    //Handle each client in separate channel
-                    clients <- conn
+                        //Handle connections in separate channels
+                        go handleClients(clients, com_name)
+
+                        //Handle each client in separate channel
+                        clients <- conn
+
+                    } else { //If not CPs or DPs  
+
+                        conn.Close() //Close connection
+                    }
 
                 } else if err != nil {
 
@@ -183,27 +163,24 @@ func main() {
 
                         case <-finish:
 
-                            if dp_step_no != dp_s_no + 3 { //If DPs have not finished
+                            //Send finish signal to all CPs
+                            for i := 0; i < no_CPs; i++ {
+
+                                signalParty(cp_hname[i], cp_ips[i], true, cp_step_no)
+                            }
+
+                            if dp_step_no != ts_s_no + 4 { //If DPs have not finished
 
                                 //Send finish signal to all DPs
                                 for i := 0; i < no_DPs; i++ {
 
-                                    signalPartytoBcast(dp_hname[i], dp_ips[i], true)
-                                }
-                            }
-
-                            if cp_step_no != cp_s_no + 11 { //If CPs have not finished  
-
-                                //Send finish signal to all CPs
-                                for i := 0; i < no_CPs; i++ {
-
-                                    signalPartytoBcast(cp_hname[i], cp_ips[i], true)
+                                    signalParty(dp_hname[i], dp_ips[i], true, dp_step_no)
                                 }
                             }
 
                             wg.Wait()                            
 
-                            if cp_step_no == cp_s_no + 11 { //Finish
+                            if cp_step_no == ts_s_no + 11 { //Finish
 
                                 //Finishing measurement
                                 fmt.Println("Finished measurement no. ", expt_no)
@@ -248,44 +225,42 @@ func main() {
     fmt.Println("Finished measurements. Exiting.")
 }
 
-//Input: Party (CP/DP) hostname, Party (CP/DP) IP, Finish flag 
-//Function: Signal next Party to broadcast
-func signalPartytoBcast(party_hname, party_ip string, fin bool) {
-
-    mutex.Lock() //Lock mutex
+//Input: Party (CP/DP) hostname, Party (CP/DP) IP, Finish flag, Session no.
+//Function: Signal next party
+func signalParty(party_hname, party_ip string, fin bool, sno uint32) {
 
     sig := new(TSmsg.Signal) //TS signal for next broadcast party
 
     sig.Fflag = proto.Bool(fin) //Set TS signal finish flag
 
+    sig.SNo = proto.Int32(int32(sno)) //Set Session no.
+
+    port := ":" //Port no.
+
     //Set TS signal session no.
     if contains(cp_hname, party_hname) {
 
-        //Set CP session no.
-        sig.SNo = proto.Int32(int32(cp_s_no))
+        //Set port no.
+        port = port + "6100"
 
     } else if contains(dp_hname, party_hname) {
 
-       	//Set DP session no.
-        sig.SNo = proto.Int32(int32(dp_s_no))
-
+        //Set port no.
+        port = port + "7100"
     }
 
     //Convert to Bytes
     sigb, _ := proto.Marshal(sig)
 
     //Send signal to next broadcast party
-    fmt.Println(sigb)
-    //sendDataToDest(sigb, party_hname, party_ip)
-
-    mutex.Unlock()
+    sendDataToDest(sigb, party_hname, party_ip+port)
 }
 
-//Input: Client Socket Channel
+//Input: Client Socket Channel, Client common name
 //Function: Handle client connection 
-func handleClients(clients chan net.Conn) {
+func handleClients(clients chan net.Conn, com_name string) {
 
-    defer wg.Done()
+    defer wg.Done() //Decrement counter when goroutine completes
 
     //Wait for next client connection to come off queue.
     conn := <-clients
@@ -293,12 +268,9 @@ func handleClients(clients chan net.Conn) {
     //Receive Data
     buf := receiveData(conn)
 
-    //Parse Common Name
-    com_name := parseCommonName(conn)
-
-    //Parse response
-    resp := new(TSmsg.Signal)
-    proto.Unmarshal(buf, resp)
+    //Parse signal
+    sig := new(TSmsg.Signal)
+    proto.Unmarshal(buf, sig)
 
     mutex.Lock() //Lock mutex
 
@@ -307,13 +279,11 @@ func handleClients(clients chan net.Conn) {
         //If Data Received from DP
         if contains(dp_hname, com_name) {
 
-            dpsig := new(TSmsg.Signal) //Signal from DP
-
             //If finish flag not set
-            if *dpsig.Fflag == false {
+            if *sig.Fflag == false {
 
                 //Verify Step No. and Session No.
-                if *dpsig.SNo == int32(dp_step_no) {
+                if *sig.SNo == int32(dp_step_no) {
 
                     no_dp_res = no_dp_res + 1 //Increment no. of DP responded
 
@@ -326,7 +296,7 @@ func handleClients(clients chan net.Conn) {
                     return
                 }
 
-            } else if *dpsig.Fflag == true {//Error
+            } else if *sig.Fflag == true {//Error
 
                 fmt.Println("Error: DP ", com_name, "sent quit")
 
@@ -338,35 +308,55 @@ func handleClients(clients chan net.Conn) {
             //If all DPs have responded
             if no_dp_res == no_DPs {
 
-                var start time.Time                
+                if dp_step_no == ts_s_no { //Step No. 0
 
-                if dp_step_no == dp_s_no + 1 { //Step No. 1
+                    if config_flag == false {//If config flag unset
+
+                        dp_step_no += 1 //Increment DP step no.
+
+                        //Send signal to DPs to share Symmetric keys with the CPs
+                        fmt.Println("Signal DPs to send symmetric key shares. Step No.", dp_step_no-ts_s_no)
+                        for i := 0; i < no_DPs; i++ {
+
+                            signalParty(dp_hname[i], dp_ips[i], false, dp_step_no)
+                        }
+                    }
+
+                    config_flag = false //Set config flag
+
+                } else if dp_step_no == ts_s_no + 1 { //Step No. 1
 
                     dp_step_no += 1 //Increment DP step no.
 
                     //Send signal to DPs to start data collection
                     for i := 0; i < no_DPs; i++ {
 
-                        signalPartytoBcast(dp_hname[i], dp_ips[i], false)
+                        signalParty(dp_hname[i], dp_ips[i], false, dp_step_no)
                     }         
                                
                     start = time.Now() //Data collection start time
 
-                } else if dp_step_no == dp_s_no + 2 { //Step No. 2
+                } else if dp_step_no == ts_s_no + 2 { //Step No. 2
 
                     end := time.Since(start).Hours()
 
                     if end >= float64(epoch) {//If data collected for an epoch
-                          
-                        dp_step_no += 1 //Increment DP step no.
 
-                        //Send signal to send data to CPs
-                        for i := 0; i < no_DPs; i++ {
+                        if data_flag == true {//If data flag set
 
-                            signalPartytoBcast(dp_hname[i], dp_ips[i], false)
+                            dp_step_no += 1 //Increment DP step no.
+
+                            //Signal DPs to send data to CPs
+                            fmt.Println("Signal DPs to send masked data shares. Step No.", dp_step_no-ts_s_no)
+                            for i := 0; i < no_DPs; i++ {
+
+                                signalParty(dp_hname[i], dp_ips[i], false, dp_step_no)
+                            }
                         }
 
-                    } else { //Data not collected for an epoch - error
+                        data_flag = true //Set data flag
+
+                    } else if end < float64(epoch) { //Data not collected for an epoch - error
 
                         fmt.Println("Error: Data not collected for an epoch")
 
@@ -375,12 +365,14 @@ func handleClients(clients chan net.Conn) {
                         return
                     }
 
-                } else if dp_step_no == dp_s_no + 3 { //Step No. 3
+                } else if dp_step_no == ts_s_no + 3 { //Step No. 3
+
+                    dp_step_no += 1 //Increment DP step no.
 
                     //Send finish signal to DPs 
                     for i := 0; i < no_DPs; i++ {
 
-                        signalPartytoBcast(dp_hname[i], dp_ips[i], true)
+                        signalParty(dp_hname[i], dp_ips[i], true, dp_step_no)
                     }
                 }
 
@@ -391,13 +383,11 @@ func handleClients(clients chan net.Conn) {
         //If Data Received from CP
         if contains(cp_hname, com_name) {
 
-            cpsig := new(TSmsg.Signal) //Signal from CP
-
             //If finish flag not set
-            if *cpsig.Fflag == false {
+            if *sig.Fflag == false {
 
                 //Verify Step No. and Session No.
-                if *cpsig.SNo == int32(cp_step_no) {
+                if *sig.SNo == int32(cp_step_no) {
 
                     no_cp_res = no_cp_res + 1 //Increment no. of CP responded
 
@@ -410,9 +400,9 @@ func handleClients(clients chan net.Conn) {
                     return
                 }
 
-            } else if *cpsig.Fflag == true {//Error
+            } else if *sig.Fflag == true {//Error
 
-                fmt.Println("Error: CP ", com_name, "sent quit")
+                fmt.Println("Error: CP ", com_name, "sent quit ")
 
                 shutdownTS() //Shutdown TS gracefully
 
@@ -422,22 +412,43 @@ func handleClients(clients chan net.Conn) {
             //If all CPs have responded
             if no_cp_res == no_CPs {
 
-                if cp_step_no == cp_s_no + 1 || cp_step_no == cp_s_no + 6 { //Step No. 1 or 6 (Acknowledgement from CPs that DPs have sent shared key/data)
+                 if cp_step_no == ts_s_no {  //Step No. 0
 
                     cp_step_no += 1 //Increment CP step no.
 
-                    cp_bcast = 1 //Set broadcasting CP to 1st CP
+                    cp_bcast = -1 //Wait for CPs acknowledgement
+
+                    if config_flag == false {//If config flag unset
+
+                        dp_step_no += 1 //Increment DP step no.
+
+                        //Send signal to DPs to share Symmetric keys with the CPs
+                        fmt.Println("Signal DPs to send symmetric key shares. Step No.", dp_step_no-ts_s_no)
+                        for i := 0; i < no_DPs; i++ {
+
+                            signalParty(dp_hname[i], dp_ips[i], false, dp_step_no)
+                        }
+       	       	    }  	
+
+       	       	    config_flag = false //Set config flag
+
+                } else if cp_step_no == ts_s_no + 1 || cp_step_no == ts_s_no + 2 || cp_step_no == ts_s_no + 6 { //Step No. 1 or 6 
+
+                    cp_step_no += 1 //Increment CP step no.
+
+                    cp_bcast = 0 //Set broadcasting CP to 1st CP
 
                     //Send signal to 1st CP to broadcast
-                    signalPartytoBcast(cp_hname[cp_bcast-1], cp_ips[cp_bcast-1], false)
+                    fmt.Println("Sending signal to", cp_hname[cp_bcast], "Step No.", cp_step_no-ts_s_no)
+                    signalParty(cp_hname[cp_bcast], cp_ips[cp_bcast], false, cp_step_no)
                                
-                } else if cp_step_no == cp_s_no + 2 || cp_step_no == cp_s_no + 3 || cp_step_no == cp_s_no + 4 || cp_step_no == cp_s_no + 7 || cp_step_no == cp_s_no + 8 || cp_step_no == cp_s_no + 9 { //Step No. 2, 3, 4, 7, 8, or 9 (Regular sequential CP broadcast)
+                } else if cp_step_no == ts_s_no + 3 || cp_step_no == ts_s_no + 4 || cp_step_no == ts_s_no + 7 || cp_step_no == ts_s_no + 8 || cp_step_no == ts_s_no + 9 { //Step No. 2, 3, 4, 7, 8, or 9 (Regular sequential CP broadcast)
 
-                    if cp_bcast == no_CPs { //If Last CP has broadcasted
+                    if cp_bcast == no_CPs - 1 { //If Last CP has broadcasted
 
                         cp_step_no += 1 //Increment CP step no.
 
-                        cp_bcast = 1 //Set broadcasting CP to 1st CP
+                        cp_bcast = 0 //Set broadcasting CP to 1st CP
 
                     } else {
 
@@ -445,27 +456,42 @@ func handleClients(clients chan net.Conn) {
                     } 
 
                     //Send signal to next CP to broadcast
-                    signalPartytoBcast(cp_hname[cp_bcast-1], cp_ips[cp_bcast-1], false)
+                    fmt.Println("Sending signal to", cp_hname[cp_bcast], "Step No.", cp_step_no-ts_s_no)
+                    signalParty(cp_hname[cp_bcast], cp_ips[cp_bcast], false, cp_step_no)
 
-                } else if cp_step_no == cp_s_no + 5 {  //Step No. 5
+                } else if cp_step_no == ts_s_no + 5 {  //Step No. 5
 
-                    if cp_bcast == no_CPs { //If Last CP has broadcasted
+                    if cp_bcast == no_CPs - 1 { //If Last CP has broadcasted
 
                         cp_step_no += 1 //Increment CP step no.
 
-                        cp_bcast = 0 //Wait for CPs acknowledgement
+                        cp_bcast = -1 //Wait for CPs acknowledgement
 
+                        if data_flag == true {//If data flag set                                       
+
+                            dp_step_no += 1 //Increment DP step no.
+
+                            //Signal DPs to send data to CPs
+                            fmt.Println("Signal DPs to send masked data shares. Step No.", dp_step_no-ts_s_no)
+                            for i := 0; i < no_DPs; i++ {
+
+                                signalParty(dp_hname[i], dp_ips[i], false, dp_step_no)
+                            }
+       	       	        }
+
+                        data_flag = true //Set data flag
+                       
                     } else {
 
                         cp_bcast += 1 //Set broadcasting CP as next CP
 
                         //Send signal to next CP to broadcast
-                        signalPartytoBcast(cp_hname[cp_bcast-1], cp_ips[cp_bcast-1], false)
+                        signalParty(cp_hname[cp_bcast], cp_ips[cp_bcast], false, cp_step_no)
                     }
 
-                } else if cp_step_no == cp_s_no + 10 {  //Step No. 10
+                } else if cp_step_no == ts_s_no + 10 {  //Step No. 10
 
-                    if cp_bcast == no_CPs { //If Last CP has broadcasted
+                    if cp_bcast == no_CPs - 1 { //If Last CP has broadcasted
 
                         cp_step_no += 1 //Increment CP step no.
 
@@ -476,7 +502,7 @@ func handleClients(clients chan net.Conn) {
                         cp_bcast += 1 //Set broadcasting CP as next CP
 
                         //Send signal to next CP to broadcast
-                        signalPartytoBcast(cp_hname[cp_bcast-1], cp_ips[cp_bcast-1], false)
+                        signalParty(cp_hname[cp_bcast], cp_ips[cp_bcast], false, cp_step_no)
                     }
                 }
 
@@ -490,13 +516,55 @@ func handleClients(clients chan net.Conn) {
 
 //Input: Command-line arguments
 //Function: Parse Command-line arguments
-func parseCommandline(arg []string) {
+func parseCommandline(arg []string) (string, float64, float64) {
 
-    flag.IntVar(&epoch, "h", 24, "Epoch (in hours)")
-    flag.Float64Var(&epsilon, "e", 0.3, "Privacy parameter epsilon")
-    flag.Float64Var(&delta, "d", math.Pow(10, -12), "Privacy parameter delta")
+    var ts_ip string //TS IP
+    var epsilon, delta float64 //Privacy parameters - epsilon & delta
+
+    flag.StringVar(&ts_cname, "t", "", "TS common name (required)")
+    flag.StringVar(&ts_ip, "i", "", "TS IP (required)")
+    flag.IntVar(&epoch, "h", 0, "Epoch (in hours)")
+    flag.Float64Var(&epsilon, "e", 0.3, "Privacy parameter - epsilon")
+    flag.Float64Var(&delta, "d", math.Pow(10, -12), "Privacy parameter - delta")
 
     flag.Parse()
+
+    if ts_cname == "" {
+
+        fmt.Println("Argument required:")
+        fmt.Println("     -t string")
+        fmt.Println("     TS common name (Required)")
+        os.Exit(0) //Exit
+
+    } else if ts_ip == "" {
+
+        fmt.Println("Argument required:")
+        fmt.Println("     -i string")
+        fmt.Println("     TS IP (Required)")
+        os.Exit(0) //Exit
+    }
+
+    return ts_ip, epsilon, delta
+}
+
+//Function: Initialize variables
+func initValues() {
+
+    start = time.Time{} //Data collection start time
+
+    f_flag = false //Finish flag
+    config_flag = true //Configuration flag
+    data_flag = false //Data flag
+    cp_step_no = 0 //CP step no.
+    dp_step_no = 0 //DP step no.
+    ts_s_no = 0 //TS session No.
+    no_dp_res = 0 //No. of DPs responded
+    no_cp_res = 0 //No. of CPs responded
+    cp_bcast = 0 //Next CP to broadcast
+    ln = nil //Server listener
+    finish = make(chan bool) //Channel to send finish flag
+    mutex = &sync.Mutex{} //Mutex to lock common client variable
+    wg = &sync.WaitGroup{} //WaitGroup to wait for all goroutines to shutdown
 }
 
 //Input: Client Socket
@@ -519,10 +587,10 @@ func parseCommonName(conn net.Conn) string {
 
 //Input: Data, Destination hostname, Destination ip
 //Function: Send Data to Destination
-func sendDataToDest(data []byte, dst_hname string, dst_ip string) {
+func sendDataToDest(data []byte, dst_hname string, dst_addr string) {
 
     //Load Private Key and Certificate
-    cert, err := tls.LoadX509KeyPair("certs/TS.cert", "private/TS.key")
+    cert, err := tls.LoadX509KeyPair("certs/" + ts_cname + ".cert", "private/" + ts_cname + ".key")
     checkError(err)
 
     //Add CA certificate to pool
@@ -532,17 +600,7 @@ func sendDataToDest(data []byte, dst_hname string, dst_ip string) {
 
     //Dial TCP Connection
     config := tls.Config{Certificates: []tls.Certificate{cert}, RootCAs: caCertPool, ServerName: dst_hname,}
-    sock := ""
-    if (dst_hname == "DP") {
-
-        sock = dst_ip+":7100"
-
-    } else {
-
-        sock = dst_ip+":6100"
-    }
-
-    con,err := net.Dial("tcp", sock)
+    con,err := net.Dial("tcp", dst_addr)
     checkError(err)
 
     //Convert to TLS Connection
@@ -557,12 +615,12 @@ func sendDataToDest(data []byte, dst_hname string, dst_ip string) {
     checkError(err)
 }
 
-//Input: Client common name, Listener
+//Input: TS common name
 //Output: Socket
 //Function: Accept new connections in  Socket
-func acceptConnections(listener net.Listener) (*tls.Conn, error) {
+func acceptConnections() (*tls.Conn, error) {
     //Create Server Socket
-    cert, err1 := tls.LoadX509KeyPair("certs/TS.cert", "private/TS.key")
+    cert, err1 := tls.LoadX509KeyPair("certs/" + ts_cname + ".cert", "private/" + ts_cname + ".key")
     checkError(err1)
     
     //Add CA certificate to pool
@@ -572,11 +630,22 @@ func acceptConnections(listener net.Listener) (*tls.Conn, error) {
     
     //Create TLS Listener and Accept Connection
     config := tls.Config{Certificates: []tls.Certificate{cert}, ClientCAs: caCertPool, ClientAuth: tls.RequireAndVerifyClientCert,}
-    conn, err := listener.Accept()
-    file, _ := conn.(*net.TCPConn).File()
-    err1 = syscall.SetsockoptInt(int(file.Fd()), syscall.SOL_SOCKET, syscall.SO_REUSEADDR, 1)
-    sock := tls.Server(conn, &config)
-        
+    conn, err := ln.Accept()
+
+    var sock *tls.Conn //Client socket
+
+    //If error
+    if err != nil {
+
+        return nil, err
+
+    } else { //If not error
+
+        file, _ := conn.(*net.TCPConn).File()
+        err1 = syscall.SetsockoptInt(int(file.Fd()), syscall.SOL_SOCKET, syscall.SO_REUSEADDR, 1)
+        sock = tls.Server(conn, &config)
+    }
+
     return sock, err
 }
 
@@ -600,17 +669,6 @@ func receiveData(conn net.Conn) []byte {
     return msg_buf
 }
 
-//Input: Port No.
-//Output: Server Socket
-//Function: Creates Server Socket
-func createServer(port string) net.Listener {
-
-    //Create TCP Listener
-    listener, _ := net.Listen("tcp", "localhost:" + port)
-
-    return listener
-}
-
 //Function: Singnal to all CPs, DPs and shutdown TS gracefully
 func shutdownTS() {
 
@@ -618,7 +676,7 @@ func shutdownTS() {
 
     close(finish) //Quit
 
-    sock.Close() //Shutdown TS gracefully
+    ln.Close() //Shutdown TS gracefully
 }
 
 //Input: Party list, Party name
