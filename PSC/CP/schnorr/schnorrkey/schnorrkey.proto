@@ -1,0 +1,16 @@
+/*
+Created on Apr 18, 2017
+
+@author: Akshaya Mani, Georgetown University
+*/
+
+syntax = "proto2";
+package Schnorrkey;
+
+message Priv {
+  required bytes X = 1;
+}
+
+message Pub {
+  required bytes Y = 1;
+}
