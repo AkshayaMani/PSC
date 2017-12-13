@@ -33,7 +33,7 @@ var b int64 //Hash table size
 var n int64 //No. of noise vectors
 
 var ts_hname = "TS" //TS hostname
-var ts_ip = "10.176.5.16" //TS IP
+var ts_ip = "10.176.5.15" //TS IP
 var cp_hname []string //CP hostnames
 var dp_hname []string //DP hostnames
 var cp_ips []string //CP IPs

@@ -27,6 +27,7 @@ import (
     "PSC/CP/schnorr/schnorrkey"
     "PSC/CP/cpres"
     "PSC/TS/tsmsg"
+    "runtime"
     "strconv"
     "sync"
     "syscall"
@@ -70,7 +71,7 @@ var cp_session_flag bool //CP session flag
 var ln net.Listener //Server listener
 var finish chan bool //Channel to send finish flag
 var x abstract.Scalar //CP private key
-var y = make([]abstract.Point, no_CPs) //CP ElGamal public key list
+var y []abstract.Point //CP ElGamal public key list
 var pub = new(Schnorrkey.Pub) //CP ElGamal public key in bytes
 var Y = nist.NewAES128SHA256P256().Point().Null() //Compound public key
 var k_j []abstract.Scalar //Key Share
@@ -84,7 +85,7 @@ var R []abstract.Point //Product of all CP ElGamal Blinding Factors
 var C []abstract.Point //Product of all CP ElGamal Ciphers
 var R_O []abstract.Point //Shuffled ElGamal Blinding Factors
 var C_O []abstract.Point //Shuffled ElGamal Ciphers
-var cp_resp = new(CPres.Response) //CP Response
+var cp_res_byte []byte //CP Response in bytes
 var mutex = &sync.Mutex{} //Mutex to lock common client variable
 var wg = &sync.WaitGroup{} //WaitGroup to wait for all goroutines to shutdown
 
@@ -122,6 +123,7 @@ func main() {
 
                     //Handle connections in separate channels
                     go handleClients(clients, com_name)
+                    fmt.Println("No. of go routines", runtime.NumGoroutine())
 
                     //Handle each client in separate channel
                     clients <- conn
@@ -250,9 +252,10 @@ func broadcastCPData() {
 
             //Convert to bytes
             priv_bytes.X = schnorr_priv.Bytes()
-            var b bytes.Buffer
-            _,_ = schnorr_pub.MarshalTo(&b)
-            pub_bytes.Y = b.Bytes()
+            tb.Reset() //Buffer Reset
+            _,_ = schnorr_pub.MarshalTo(&tb)
+            pub_bytes.Y = make([]byte, len(tb.Bytes()))
+            copy(pub_bytes.Y[:], tb.Bytes())
 
             //Write Schnorr private key to file
             out, err := proto.Marshal(priv_bytes)
@@ -269,7 +272,8 @@ func broadcastCPData() {
             //Set CP response to Schnorr public key
             resp.R = make([][]byte, 1)
             resp.Proof = make([][]byte, 1)
-            resp.R[0] = b.Bytes()
+            resp.R[0] = make([]byte, len(tb.Bytes()))
+            copy(resp.R[0][:], tb.Bytes())
 
             //Create Proof
             rep := proof.Rep("X", "x", "B")
@@ -591,16 +595,12 @@ func broadcastCPData() {
         }
     }
 
-    mutex.Unlock()
+    mutex.Unlock() //Unlock mutex
 }
 
 //Input: Client Socket Channel, Client common name
 //Function: Handle client connection 
 func handleClients(clients chan net.Conn, com_name string) {
-
-    var r_flag = false
-    var r_index int32 //Re-Broadcasting Index
-    var r_cp_bcast int32 //Broadcasting CP
 
     defer wg.Done() //Decrement counter when goroutine completes
 
@@ -695,7 +695,7 @@ func handleClients(clients chan net.Conn, com_name string) {
                 if cp_session_flag == true { //If CP session flag set
 
                     //Parse CP Response
-                    cp_resp = new(CPres.Response)
+                    cp_resp := new(CPres.Response)
                     proto.Unmarshal(buf, cp_resp)
 
                     //If Step No. is 2
@@ -725,7 +725,7 @@ func handleClients(clients chan net.Conn, com_name string) {
                         //If Error in Verifying
                         if err != nil {
 
-                            fmt.Println("Err: CP Schnorr public key proof not verified")
+                            fmt.Println("Err: CP Schnorr public key proof not verified \n", err)
 
                             sendTSSignal(true, ts_s_no+step_no) //Send finish signal to TS
 
@@ -735,9 +735,10 @@ func handleClients(clients chan net.Conn, com_name string) {
                         schnorrpub := new(Schnorrkey.Pub) //CP Schnorr public key
 
                         //Convert to bytes
-                        var b bytes.Buffer
-                        _,_ = schnorr_pub.MarshalTo(&b)
-                        schnorrpub.Y = b.Bytes()
+                        var tb bytes.Buffer //Temporary buffer
+                        _,_ = schnorr_pub.MarshalTo(&tb)
+                        schnorrpub.Y = make([]byte, len(tb.Bytes()))
+                        copy(schnorrpub.Y[:], tb.Bytes())
 
                         //Write to file
                         out, err := proto.Marshal(schnorrpub)
@@ -799,12 +800,14 @@ func handleClients(clients chan net.Conn, com_name string) {
                             }
                              
 	                    b_j[no_cp_res] = buf[9:9+l] //Store Signed Message
-                            proto.Unmarshal(buf[9+l:], cp_resp) //Store Message
-
-                            r_index = no_cp_res
-                            r_cp_bcast = cp_bcast
-                            r_flag = true
-
+                            //Store response
+                            cp_res_byte = make([]byte, len(buf[9+l:]))
+                            i := copy(cp_res_byte[:], buf[9+l:])
+                            fmt.Println("Buffer change",len(buf[9+l:]),i)
+           
+                            fmt.Println("     Rebroadcasting msg sent by CP", int(cp_bcast))
+                            sendDataN_1(cp_s_no+step_no-2, int(cp_bcast), b_j[no_cp_res]) //Re-Broadcasting
+                             
                         } else if uint8(buf[0]) == 0 { //If Broadcast Flag not Set
 
                             if no_cp_res != 0 { //If not the 1st broadcasted message
@@ -837,6 +840,11 @@ func handleClients(clients chan net.Conn, com_name string) {
                     //If All CPs have finished Broadcasting/Re-Broadcasting
                     if no_cp_res == no_CPs - 1 {
 
+                        //Parse CP Response
+                        cp_resp := new(CPres.Response)
+                        err := proto.Unmarshal(cp_res_byte, cp_resp)
+                        fmt.Println("Unmarshal Buffer", err)
+
                         if step_no == 4 { //If Step No. is 4
 
                             tmp := bytes.NewReader(cp_resp.R[0]) //Temporary
@@ -852,7 +860,7 @@ func handleClients(clients chan net.Conn, com_name string) {
                             //If Error in Verifying
                             if err != nil {
 
-		                fmt.Println("Err: CP ElGamal public key proof not verified")
+		                fmt.Println("Err: CP ElGamal public key proof not verified \n", err)
 
                                 sendTSSignal(true, ts_s_no+step_no) //Send finish signal to TS
 
@@ -871,17 +879,17 @@ func handleClients(clients chan net.Conn, com_name string) {
                                 nr_o[i][0] = suite.Point()
                                 nr_o[i][0].UnmarshalFrom(tmp) //Assign Shuffled Noise ElGamal Blinding Factors
 
-                                tmp = bytes.NewReader(cp_resp.R[(2*i)+1]) //Temporary
+                                tmp1 := bytes.NewReader(cp_resp.R[(2*i)+1]) //Temporary
                                 nr_o[i][1] = suite.Point()
-                                nr_o[i][1].UnmarshalFrom(tmp) //Assign Shuffled Noise ElGamal Blinding Factors
+                                nr_o[i][1].UnmarshalFrom(tmp1) //Assign Shuffled Noise ElGamal Blinding Factors
 
-                                tmp = bytes.NewReader(cp_resp.C[2*i]) //Temporary
+                                tmp2 := bytes.NewReader(cp_resp.C[2*i]) //Temporary
                                 nc_o[i][0] = suite.Point()
-                                nc_o[i][0].UnmarshalFrom(tmp) //Assign Shuffled Noise ElGamal Ciphers
+                                nc_o[i][0].UnmarshalFrom(tmp2) //Assign Shuffled Noise ElGamal Ciphers
 
-                                tmp = bytes.NewReader(cp_resp.C[(2*i)+1]) //Temporary
+                                tmp3 := bytes.NewReader(cp_resp.C[(2*i)+1]) //Temporary
                                 nc_o[i][1] = suite.Point()
-                                nc_o[i][1].UnmarshalFrom(tmp) //Assign Shuffled Noise ElGamal Ciphers
+                                nc_o[i][1].UnmarshalFrom(tmp3) //Assign Shuffled Noise ElGamal Ciphers
 
                                 //Verify Proof
                                 verifier := shuffle.BiffleVerifier(suite, nil, Y, nr[i], nc[i], nr_o[i], nc_o[i])
@@ -890,7 +898,7 @@ func handleClients(clients chan net.Conn, com_name string) {
                                 //If Error in Verifying
                                 if err != nil {
 
-                                    fmt.Println("Err: Noise generation proof not verified")
+                                    fmt.Println("Err: Noise generation proof", i, "not verified \n", err)
 
                                     sendTSSignal(true, ts_s_no+step_no) //Send finish signal to TS
 
@@ -939,16 +947,16 @@ func handleClients(clients chan net.Conn, com_name string) {
                                 //If Error in Verifying
                                 if err != nil {
 
-                                    fmt.Println("Err: ElGamal ciphertext computation proof not verified")
+                                    fmt.Println("Err: ElGamal ciphertext computation proof", i, "not verified \n", err)
 
                                     sendTSSignal(true, ts_s_no+step_no) //Send finish signal to TS
 
                                     return
                                 }
 
-                                tmp = bytes.NewReader(cp_resp.C[i])
+                                tmp1 := bytes.NewReader(cp_resp.C[i])
                                 tp = suite.Point()
-                                tp.UnmarshalFrom(tmp)
+                                tp.UnmarshalFrom(tmp1)
                                 C[i].Add(C[i], tp) //Multiply ElGamal Ciphers
                             }
 
@@ -961,9 +969,9 @@ func handleClients(clients chan net.Conn, com_name string) {
                                 R_O[i] = suite.Point()
                                 R_O[i].UnmarshalFrom(tmp) //Assign Shuffled ElGamal Blinding Factors
 
-                                tmp = bytes.NewReader(cp_resp.C[i]) //Temporary
+                                tmp1 := bytes.NewReader(cp_resp.C[i]) //Temporary
                                 C_O[i] = suite.Point()
-                                C_O[i].UnmarshalFrom(tmp) //Assign Shuffled ElGamal Ciphers
+                                C_O[i].UnmarshalFrom(tmp1) //Assign Shuffled ElGamal Ciphers
                             }
 
                             //Verify Proof
@@ -973,7 +981,7 @@ func handleClients(clients chan net.Conn, com_name string) {
        	               	    //If Error in Verifying
                             if err != nil {
 
-                                fmt.Println("Err: Verifiable shuffle proof not verified")
+                                fmt.Println("Err: Verifiable shuffle proof not verified \n", err)
 
                                 sendTSSignal(true, ts_s_no+step_no) //Send finish signal to TS
 
@@ -997,13 +1005,13 @@ func handleClients(clients chan net.Conn, com_name string) {
                             //Convert Bytes to Data
                             for i := int64(0); i < b+n; i++ {
 
-                                tmp = bytes.NewReader(cp_resp.R[i]) //Temporary
+                                tmp1 := bytes.NewReader(cp_resp.R[i]) //Temporary
                                 R_O[i] = suite.Point()
-                                R_O[i].UnmarshalFrom(tmp) //Assign Re-Randomized ElGamal Blinding Factors
+                                R_O[i].UnmarshalFrom(tmp1) //Assign Re-Randomized ElGamal Blinding Factors
 
-                                tmp = bytes.NewReader(cp_resp.C[i]) //Temporary
+                                tmp2 := bytes.NewReader(cp_resp.C[i]) //Temporary
                                 C_O[i] = suite.Point()
-                                C_O[i].UnmarshalFrom(tmp) //Assign Re-Randomized ElGamal Ciphers
+                                C_O[i].UnmarshalFrom(tmp2) //Assign Re-Randomized ElGamal Ciphers
 
                                 //Verify Proof
                                 err := prf[i].Verify(suite, R[i], C[i], nil, Y, R_O[i], C_O[i])
@@ -1011,7 +1019,7 @@ func handleClients(clients chan net.Conn, com_name string) {
        	               	        //If Error in Verifying
                                 if err != nil {
 
-                                    fmt.Println("Err: Re-randomization re-encryption proof not verified")
+                                    fmt.Println("Err: Re-randomization re-encryption proof", i, "not verified \n", err)
 
                                     sendTSSignal(true, ts_s_no+step_no) //Send finish signal to TS
 
@@ -1046,13 +1054,13 @@ func handleClients(clients chan net.Conn, com_name string) {
                             //Convert Bytes to Data
                             for i := int64(0); i < b+n; i++ {
 
-                                tmp := bytes.NewReader(cp_resp.R[i]) //Temporary
+                                tmp1 := bytes.NewReader(cp_resp.R[i]) //Temporary
                                 R_O[i] = suite.Point()
-                                R_O[i].UnmarshalFrom(tmp) //Assign Re-Randomized ElGamal Blinding Factors
+                                R_O[i].UnmarshalFrom(tmp1) //Assign Re-Randomized ElGamal Blinding Factors
 
-                                tmp = bytes.NewReader(cp_resp.C[i])  //Temporary
+                                tmp2 := bytes.NewReader(cp_resp.C[i])  //Temporary
                                 C_O[i] = suite.Point()
-                                C_O[i].UnmarshalFrom(tmp) //Assign Re-Randomized ElGamal Ciphers
+                                C_O[i].UnmarshalFrom(tmp2) //Assign Re-Randomized ElGamal Ciphers
 
                                 //Verify Proof
                                 err := prf[i].Verify(suite, nil, R[i], y[cp_bcast], suite.Point().Sub(C[i], C_O[i]))
@@ -1060,7 +1068,7 @@ func handleClients(clients chan net.Conn, com_name string) {
                                 //If Error in Verifying
                                 if err != nil {
 
-                                    fmt.Println("Err: Decryption proof not verified")
+                                    fmt.Println("Err: Decryption proof", i, "not verified \n", err)
 
                                     sendTSSignal(true, ts_s_no+step_no) //Send finish signal to TS
 
@@ -1104,7 +1112,8 @@ func handleClients(clients chan net.Conn, com_name string) {
                 proto.Unmarshal(buf, sig) //Parse TS signal
 
                 if *sig.Fflag == true { //If finish flag set
-
+     
+                    fmt.Println("Shutting down ", cp_cname)
                     shutdownCP() //Shutdown CP gracefully 
 
                 } else { //Finish flag not set
@@ -1112,6 +1121,7 @@ func handleClients(clients chan net.Conn, com_name string) {
                     if *sig.SNo == int32(ts_s_no+step_no) && cp_bcast == cp_no { //Check TS step no. and broadcasting CP
 
                         go broadcastCPData() //Broadcast CP data
+                        fmt.Println("No. of go routines", runtime.NumGoroutine())
 
                     } else { //Wrong signal from TS
 
@@ -1127,11 +1137,6 @@ func handleClients(clients chan net.Conn, com_name string) {
     }
 
     mutex.Unlock() //Unlock mutex
-
-    if r_flag == true {
-
-        sendDataN_1(cp_s_no+step_no-2, int(r_cp_bcast), b_j[r_index]) //Re-Broadcasting
-    }
 }
 
 //Input: Command-line Arguments
@@ -1204,7 +1209,7 @@ func initValues() {
     C = nil //Product of all CP ElGamal ciphers
     R_O = nil //Shuffled ElGamal blinding factors
     C_O = nil //Shuffled ElGamal ciphers
-    cp_resp = new(CPres.Response) //CP Response
+    cp_res_byte = nil //CP Response
     mutex = &sync.Mutex{} //Mutex to lock common client variable
     wg = &sync.WaitGroup{} //WaitGroup to wait for all goroutines to shutdown
 }
@@ -1218,6 +1223,7 @@ func assignConfig(config *TSmsg.Config) {
     epsilon := float64(*config.Epsilon) //Privacy parameter - epsilon
     delta := float64(*config.Delta) //Privacy parameter - delta
     n = int64(math.Floor((math.Log(2 / delta) * 64)/math.Pow(epsilon, 2))) + 1 //No. of Noise vectors 
+
     no_CPs = *config.Ncps //No. of CPs
     cp_hname = make([]string, no_CPs) //CP hostnames
     cp_ips = make([]string, no_CPs) //CP IPs    

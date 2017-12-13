@@ -25,14 +25,14 @@ import (
     "time"
 )
 
-const no_CPs = 5 //No.of CPs
-const no_DPs = 3 //No. of DPs
+const no_CPs = 3 //No.of CPs
+const no_DPs = 5 //No. of DPs
 const b = 200000 //Hash table size
 var no_Expts = 2 //No. of measurements
-var cp_hname = []string{"CP1", "CP2", "CP3", "CP4", "CP5"} //CP hostnames
-var dp_hname = []string{"DP1", "DP2", "DP3"}//, "DP1", "DP1", "DP1", "DP1", "DP1", "DP1", "DP1", "DP1", "DP1", "DP1", "DP1", "DP1", "DP1", "DP1", "DP1", "DP1", "DP1"} //DP hostnames
-var cp_ips = []string{"10.176.5.20", "10.176.5.21", "10.176.5.22", "10.176.5.23", "10.176.5.24"} //CP IPs
-var dp_ips = []string{"10.176.5.17", "10.176.5.18", "10.176.5.19"}//, "10.176.5.17", "10.176.5.17", "10.176.5.17", "10.176.5.17", "10.176.5.17", "10.176.5.17", "10.176.5.17", "10.176.5.17", "10.176.5.17", "10.176.5.17", "10.176.5.17", "10.176.5.17", "10.176.5.17", "10.176.5.17", "10.176.5.17", "10.176.5.17", "10.176.5.17"} //DP IPs
+var cp_hname = []string{"CP1", "CP2", "CP3"}//, "CP4", "CP5"} //CP hostnames
+var dp_hname = []string{"DP1", "DP2", "DP3", "DP4", "DP5"}//, "DP1", "DP1", "DP1", "DP1", "DP1", "DP1", "DP1", "DP1", "DP1", "DP1", "DP1", "DP1", "DP1", "DP1", "DP1"} //DP hostnames
+var cp_ips = []string{"10.176.5.52", "10.176.5.53", "10.176.5.54"}//, "10.176.5.23", "10.176.5.24"} //CP IPs
+var dp_ips = []string{"10.176.5.20", "10.176.5.21", "10.176.5.22", "10.176.5.23", "10.176.5.24"}//, "10.176.5.17", "10.176.5.17", "10.176.5.17", "10.176.5.17", "10.176.5.17", "10.176.5.17", "10.176.5.17", "10.176.5.17", "10.176.5.17", "10.176.5.17", "10.176.5.17", "10.176.5.17", "10.176.5.17", "10.176.5.17", "10.176.5.17"} //DP IPs
 var ts_cname string //TS common name
 var epoch int //Epoch
 var start time.Time //Data collection start time
@@ -164,6 +164,7 @@ func main() {
                         case <-finish:
 
                             //Send finish signal to all CPs
+                            fmt.Println("Sending finish signal to CPs")
                             for i := 0; i < no_CPs; i++ {
 
                                 signalParty(cp_hname[i], cp_ips[i], true, cp_step_no)
@@ -172,6 +173,7 @@ func main() {
                             if dp_step_no != ts_s_no + 4 { //If DPs have not finished
 
                                 //Send finish signal to all DPs
+                                fmt.Println("Sending finish signal to DPs")
                                 for i := 0; i < no_DPs; i++ {
 
                                     signalParty(dp_hname[i], dp_ips[i], true, dp_step_no)
@@ -329,6 +331,7 @@ func handleClients(clients chan net.Conn, com_name string) {
                     dp_step_no += 1 //Increment DP step no.
 
                     //Send signal to DPs to start data collection
+                    fmt.Println("Signal DPs to collect data. Step No.", dp_step_no-ts_s_no)
                     for i := 0; i < no_DPs; i++ {
 
                         signalParty(dp_hname[i], dp_ips[i], false, dp_step_no)
@@ -370,6 +373,7 @@ func handleClients(clients chan net.Conn, com_name string) {
                     dp_step_no += 1 //Increment DP step no.
 
                     //Send finish signal to DPs 
+                    fmt.Println("Signal DPs to finish. Step No.", dp_step_no-ts_s_no)
                     for i := 0; i < no_DPs; i++ {
 
                         signalParty(dp_hname[i], dp_ips[i], true, dp_step_no)
@@ -378,10 +382,8 @@ func handleClients(clients chan net.Conn, com_name string) {
 
                 no_dp_res = 0 //Set no. of DPs responded to zero
             }
-        }
 
-        //If Data Received from CP
-        if contains(cp_hname, com_name) {
+        } else if contains(cp_hname, com_name) { //If Data Received from CP
 
             //If finish flag not set
             if *sig.Fflag == false {
@@ -432,7 +434,7 @@ func handleClients(clients chan net.Conn, com_name string) {
 
        	       	    config_flag = false //Set config flag
 
-                } else if cp_step_no == ts_s_no + 1 || cp_step_no == ts_s_no + 2 || cp_step_no == ts_s_no + 6 { //Step No. 1 or 6 
+                } else if cp_step_no == ts_s_no + 1 || cp_step_no == ts_s_no + 2 || cp_step_no == ts_s_no + 6 { //Step No. 1, 2 or 6 
 
                     cp_step_no += 1 //Increment CP step no.
 
@@ -486,6 +488,7 @@ func handleClients(clients chan net.Conn, com_name string) {
                         cp_bcast += 1 //Set broadcasting CP as next CP
 
                         //Send signal to next CP to broadcast
+                        fmt.Println("Sending signal to", cp_hname[cp_bcast], "Step No.", cp_step_no-ts_s_no)
                         signalParty(cp_hname[cp_bcast], cp_ips[cp_bcast], false, cp_step_no)
                     }
 
@@ -502,6 +505,7 @@ func handleClients(clients chan net.Conn, com_name string) {
                         cp_bcast += 1 //Set broadcasting CP as next CP
 
                         //Send signal to next CP to broadcast
+                        fmt.Println("Sending signal to", cp_hname[cp_bcast], "Step No.", cp_step_no-ts_s_no)
                         signalParty(cp_hname[cp_bcast], cp_ips[cp_bcast], false, cp_step_no)
                     }
                 }
