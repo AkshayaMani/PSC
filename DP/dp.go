@@ -17,7 +17,6 @@ import (
     "github.com/golang/protobuf/proto"
     "io"
     "io/ioutil"
-    "math"
     "net"
     "os"
     "PSC/DP/dpres"
@@ -30,7 +29,6 @@ var no_CPs int32 //No.of CPs
 var no_DPs int32 //No. of DPs
 var epoch int //Epoch
 var b int64 //Hash table size
-var n int64 //No. of noise vectors
 
 var ts_hname = "TS" //TS hostname
 var ts_ip = "10.176.5.15" //TS IP
@@ -45,10 +43,10 @@ var ts_s_no uint32 //TS Session No.
 var ts_config_flag bool //TS configuration flag
 var ln net.Listener //Server listener
 var finish chan bool //Channel to send finish flag
+var clients chan net.Conn //Channel to handle simultaneous client connections
 var k []abstract.Scalar //CP-DP Keys
 var c []abstract.Scalar //Ciphers
 var cs [][]abstract.Scalar //Cipher share
-var mutex = &sync.Mutex{} //Mutex to lock common client variable
 var wg = &sync.WaitGroup{} //WaitGroup to wait for all goroutines to shutdown
 
 func main() {
@@ -64,70 +62,61 @@ func main() {
 
         fmt.Println("Started Data Party")
 
-        //Channel to handle simultaneous connections
-        clients := make(chan net.Conn)
+        wg.Add(1) //Increment WaitGroup counter
+
+        go acceptConnections() //Accept connections
 
         loop:
 
         for{
 
-            conn, err := acceptConnections() //Accept connections
+            select {
 
-            if conn != nil { //If Data is available
+                case conn := <- clients:
 
-                //Parse Common Name
-                com_name := parseCommonName(conn)
+                    //Parse Common Name
+                    com_name := parseCommonName(conn)
 
-                if com_name == ts_hname { //If TS
+                    if ts_hname == com_name {//If data received from TS
 
-                    wg.Add(1) //Increment WaitGroup counter
+                        //Handle TS connection
+                        handleClients(conn, com_name)
 
-                    //Handle connections in separate channels
-                    go handleClients(clients, com_name)
+                    } else { //If not TS
 
-                    //Handle each client in separate channel
-                    clients <- conn
+                        conn.Close() //Close connection
+                    }
 
-                } else { //If not TS
+                case <-finish:
 
-                    conn.Close() //Close connection
-                }
+                    wg.Wait()
 
-            } else if err != nil {
+                    if step_no == 4 { //Finish
 
-                select {
+                        //Finishing measurement
+                        fmt.Println("Finished measurement.")
 
-                    case <-finish:
+                    } else {
 
-                        wg.Wait()                            
+                        //Quit and Re-start measurement
+                        fmt.Println("Quitting... \n Re-starting measurement...")
+                    }
 
-                        if step_no == 4 { //Finish
+                    break loop
 
-                            //Finishing measurement
-                            fmt.Println("Finished measurement.")
-
-                        } else {
-
-                            //Quit and Re-start measurement
-                            fmt.Println("Quitting... \n Re-starting measurement...")
-                        }
-
-                        break loop
-
-                    default:
-                }
+                default:
             }
         }
     }
 }
 
-//Input: Finish flag, Session no.
+//Input: Session no.
 //Function: Send TS signal
-func sendTSSignal(fin bool, sno uint32) {
+func sendTSSignal(sno uint32) {
 
     sig := new(TSmsg.Signal) //TS signal
 
-    sig.Fflag = proto.Bool(fin) //Set TS signal finish flag
+    sig.Fflag = proto.Bool(f_flag) //Set TS signal finish flag
 
     //Set TS session no.
     sig.SNo = proto.Int32(int32(sno))
@@ -140,25 +129,18 @@ func sendTSSignal(fin bool, sno uint32) {
 }
 
 //Input: Client Socket Channel, Client common name
-//Function: Handle client connection 
-func handleClients(clients chan net.Conn, com_name string) {
-
-    defer wg.Done() //Decrement counter when goroutine completes
-
-    //Wait for next client connection to come off queue.
-    conn := <-clients
+//Function: Handle client connection
+func handleClients(conn net.Conn, com_name string) {
 
     //Receive Data
     buf := receiveData(conn)
-
-    mutex.Lock() //Lock mutex
 
     if f_flag == false { //Finish flag not set
 
         if ts_config_flag == true { //If TS configuration flag set
 
             ts_config_flag = false //Set configuration flag to false
-       
+
             if com_name == ts_hname { //If data received from TS
 
                 config := new(TSmsg.Config) //TS configuration
@@ -167,15 +149,17 @@ func handleClients(clients chan net.Conn, com_name string) {
                 assignConfig(config) //Assign configuration
 
                 fmt.Println("Sending TS signal. Step No.", step_no)
-                sendTSSignal(false, ts_s_no+step_no) //Send finish signal to TS
+                sendTSSignal(ts_s_no+step_no) //Send signal to TS
 
                 step_no = 1 //TS step no.
-                
+
             } else { //Data not received from TS
 
                 fmt.Println("Error: Data not sent by Tally Server")
 
-                sendTSSignal(true, ts_s_no+step_no) //Send finish signal to TS
+                f_flag = true //Set finish flag
+
+                sendTSSignal(ts_s_no+step_no) //Send finish signal to TS
 
                 return
             }
@@ -189,15 +173,15 @@ func handleClients(clients chan net.Conn, com_name string) {
 
                 if *sig.Fflag == true { //If finish flag set
 
-                    shutdownDP() //Shutdown DP gracefully 
+                    shutdownDP() //Shutdown DP gracefully
 
                 } else { //Finish flag not set
 
-                    if *sig.SNo == int32(ts_s_no+step_no) { //Check TS step no. 
+                    if *sig.SNo == int32(ts_s_no+step_no) { //Check TS step no.
 
                         suite := nist.NewAES128SHA256P256()
                         rand := suite.Cipher(abstract.RandomKey)
-                        
+
                         if step_no == 1 { //If step no. 1
 
                             //Iterate over all CPs
@@ -274,7 +258,7 @@ func handleClients(clients chan net.Conn, com_name string) {
                             }
                         }
 
-                        sendTSSignal(false, ts_s_no+step_no) //Send signal to TS
+                        sendTSSignal(ts_s_no+step_no) //Send signal to TS
                         fmt.Println("Sent TS signal ", step_no)
 
                         step_no += 1 //Increment step no.
@@ -283,7 +267,9 @@ func handleClients(clients chan net.Conn, com_name string) {
 
                         fmt.Println("Err: Wrong signal from TS")
 
-                        sendTSSignal(true, ts_s_no+step_no) //Send finish signal to TS
+                        f_flag = true //Set finish flag
+
+                        sendTSSignal(ts_s_no+step_no) //Send finish signal to TS
 
                         return
                     }
@@ -291,8 +277,6 @@ func handleClients(clients chan net.Conn, com_name string) {
             }
         }
     }
-
-    mutex.Unlock() //Unlock mutex
 }
 
 //Function: Collect data from Tor using oblivious counters
@@ -306,23 +290,32 @@ func collectData () {
 func parseCommandline(arg []string) (string){
 
     var dp_ip string //DP IP
+    var e_flag = false //Exit flag
 
     flag.StringVar(&dp_cname, "d", "", "DP common name (required)")
     flag.StringVar(&dp_ip, "i", "", "DP IP (required)")
     flag.Parse()
 
-    if dp_cname == "" {
+    if dp_cname == "" || dp_ip == "" {
 
         fmt.Println("Argument required:")
-        fmt.Println("     -d string")
-        fmt.Println("     DP common name (Required)")
-        os.Exit(0) //Exit
+        e_flag = true //Set exit flag
 
-    } else if dp_ip == "" {
+        if dp_cname == "" {
 
-        fmt.Println("Argument required:")
-        fmt.Println("     -i string")
-        fmt.Println("     DP IP (Required)")
+            fmt.Println("   -d string")
+            fmt.Println("      DP common name (Required)")
+        }
+
+        if dp_ip == "" {
+
+            fmt.Println("   -i string")
+            fmt.Println("      DP IP (Required)")
+        }
+    }
+
+    if e_flag == true {//If exit flag set
+
         os.Exit(0) //Exit
     }
 
@@ -336,7 +329,6 @@ func initValues() {
     no_DPs = 0 //No. of DPs
     epoch = 0 //Epoch
     b = 0 //Hash table size
-    n = 0 //No. of noise vectors
 
     cp_hname = nil //CP hostnames
     dp_hname = nil //DP hostnames
@@ -348,10 +340,10 @@ func initValues() {
     ts_config_flag = true //TS configuration flag
     ln = nil //Server listener
     finish = make(chan bool) //Channel to send finish flag
+    clients = make(chan net.Conn) //Channel to handle simultaneous client connections
     k = nil //CP-DP Keys
-    c = nil //Ciphers                          
+    c = nil //Ciphers
     cs = nil //Cipher shares
-    mutex = &sync.Mutex{} //Mutex to lock common client variable
     wg = &sync.WaitGroup{} //WaitGroup to wait for all goroutines to shutdown
 }
 
@@ -361,12 +353,9 @@ func assignConfig(config *TSmsg.Config) {
 
     ts_s_no = uint32(*config.SNo) //TS session no.
     epoch = int(*config.Epoch) //Epoch
-    epsilon := float64(*config.Epsilon) //Privacy parameter - epsilon
-    delta := float64(*config.Delta) //Privacy parameter - delta
-    n = int64(math.Floor((math.Log(2 / delta) * 64)/math.Pow(epsilon, 2))) + 1 //No. of Noise vectors 
     no_CPs = *config.Ncps //No. of CPs
     cp_hname = make([]string, no_CPs) //CP hostnames
-    cp_ips = make([]string, no_CPs) //CP IPs    
+    cp_ips = make([]string, no_CPs) //CP IPs
 
     copy(cp_hname[:], config.CPhname) //Assign CP hostnames
     copy(cp_ips[:], config.CPips) //Assign CP IPs
@@ -384,13 +373,13 @@ func assignConfig(config *TSmsg.Config) {
     c = make([]abstract.Scalar, b) //Ciphers
     cs = make([][]abstract.Scalar, b) //Cipher shares
 
-    suite := nist.NewAES128SHA256P256() 
+    suite := nist.NewAES128SHA256P256()
 
     //Iterate over the hashtable
     for i := int64(0); i < b; i++ {
 
         c[i] = suite.Scalar().Zero() //Initialize with zero
-        cs[i] = make([]abstract.Scalar, no_CPs) //Initialize cipher shares list 
+        cs[i] = make([]abstract.Scalar, no_CPs) //Initialize cipher shares list
     }
 
     //Iterate over the hashtable
@@ -438,38 +427,44 @@ func receiveData(conn net.Conn) []byte {
     return msg_buf
 }
 
-//Input: CP common name
+//Input: DP common name
 //Output: Socket
 //Function: Accept new connections in  Socket
-func acceptConnections() (*tls.Conn, error) {
-    //Create Server Socket
-    cert, err1 := tls.LoadX509KeyPair("certs/"+ dp_cname +".cert", "private/" + dp_cname + ".key")
-    checkError(err1)
+func acceptConnections() {
 
-    //Add CA certificate to pool
-    caCert, _ := ioutil.ReadFile("../CA/certs/ca.cert")
-    caCertPool := x509.NewCertPool()
-    caCertPool.AppendCertsFromPEM(caCert)
+    defer wg.Done() //Decrement counter when goroutine completes
 
-    //Create TLS Listener and Accept Connection
-    config := tls.Config{Certificates: []tls.Certificate{cert}, ClientCAs: caCertPool, ClientAuth: tls.RequireAndVerifyClientCert,}
-    conn, err := ln.Accept()
+    for {
 
-    var sock *tls.Conn //Client socket
+        //Create Server Socket
+        cert, err1 := tls.LoadX509KeyPair("certs/"+ dp_cname +".cert", "private/" + dp_cname + ".key")
+        checkError(err1)
 
-    //If error
-    if err != nil {
+        //Add CA certificate to pool
+        caCert, _ := ioutil.ReadFile("../CA/certs/ca.cert")
+        caCertPool := x509.NewCertPool()
+        caCertPool.AppendCertsFromPEM(caCert)
 
-        return nil, err
+        //Create TLS Listener and Accept Connection
+        config := tls.Config{Certificates: []tls.Certificate{cert}, ClientCAs: caCertPool, ClientAuth: tls.RequireAndVerifyClientCert,}
+        conn, err := ln.Accept()
 
-    } else { //If not error
+        var sock *tls.Conn //Client socket
 
-        file, _ := conn.(*net.TCPConn).File()
-        err1 = syscall.SetsockoptInt(int(file.Fd()), syscall.SOL_SOCKET, syscall.SO_REUSEADDR, 1)
-        sock = tls.Server(conn, &config)
+        //If error
+        if err != nil {
+
+            break
+
+        } else { //If not error
+
+            file, _ := conn.(*net.TCPConn).File()
+            err1 = syscall.SetsockoptInt(int(file.Fd()), syscall.SOL_SOCKET, syscall.SO_REUSEADDR, 1)
+            sock = tls.Server(conn, &config)
+
+            clients <- sock
+        }
     }
-
-    return sock, err
 }
 
 func sendDataToDest(data []byte, dst_hname string, dst_addr string) {
@@ -502,8 +497,6 @@ func sendDataToDest(data []byte, dst_hname string, dst_addr string) {
 
 //Function: Shutdown DP gracefully
 func shutdownDP() {
-
-    f_flag = true //Set finish flag
 
     close(finish) //Quit
 

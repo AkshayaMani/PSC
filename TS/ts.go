@@ -27,17 +27,18 @@ import (
 
 const no_CPs = 3 //No.of CPs
 const no_DPs = 5 //No. of DPs
-const b = 200000 //Hash table size
-var no_Expts = 2 //No. of measurements
+const b = 500000 //Hash table size
+var no_Expts = 1 //No. of measurements
 var cp_hname = []string{"CP1", "CP2", "CP3"}//, "CP4", "CP5"} //CP hostnames
 var dp_hname = []string{"DP1", "DP2", "DP3", "DP4", "DP5"}//, "DP1", "DP1", "DP1", "DP1", "DP1", "DP1", "DP1", "DP1", "DP1", "DP1", "DP1", "DP1", "DP1", "DP1", "DP1"} //DP hostnames
 var cp_ips = []string{"10.176.5.52", "10.176.5.53", "10.176.5.54"}//, "10.176.5.23", "10.176.5.24"} //CP IPs
-var dp_ips = []string{"10.176.5.20", "10.176.5.21", "10.176.5.22", "10.176.5.23", "10.176.5.24"}//, "10.176.5.17", "10.176.5.17", "10.176.5.17", "10.176.5.17", "10.176.5.17", "10.176.5.17", "10.176.5.17", "10.176.5.17", "10.176.5.17", "10.176.5.17", "10.176.5.17", "10.176.5.17", "10.176.5.17", "10.176.5.17", "10.176.5.17"} //DP IPs
+var dp_ips = []string{"10.176.5.16", "10.176.5.17", "10.176.5.18", "10.176.5.19", "10.176.5.20"}//, "10.176.5.17", "10.176.5.17", "10.176.5.17", "10.176.5.17", "10.176.5.17", "10.176.5.17", "10.176.5.17", "10.176.5.17", "10.176.5.17", "10.176.5.17", "10.176.5.17", "10.176.5.17", "10.176.5.17", "10.176.5.17", "10.176.5.17"} //DP IPs
 var ts_cname string //TS common name
 var epoch int //Epoch
 var start time.Time //Data collection start time
 var ln net.Listener //Server listener
 var finish chan bool //Channel to send finish flag
+var clients chan net.Conn //Channel to handle simultaneous client connections
 var f_flag bool //Finish flag
 var config_flag bool //Configuration flag
 var data_flag bool //Data flag
@@ -55,7 +56,7 @@ func main() {
     ts_ip, epsilon, delta := parseCommandline(os.Args) //Parse epoch, TS common name, TS IP and privacy parameters - epsilon and delta
 
     expt_no := 0 //Set measurement no. to 0
-    
+
     for{
 
         //Initialize global variables
@@ -66,17 +67,9 @@ func main() {
 
         fmt.Println("Started Tally Server")
 
-        finish = make(chan bool) //Initialise finish channel
-
-        f_flag = false //Set finish flag
-
-        no_dp_res = 0 //No. of DPs responded
-
-        no_cp_res = 0 //No. of CPs responded
-
         expt_no = expt_no + 1 //Increment measurement no.
 
-        if expt_no < no_Expts { //Continue measurements
+        if expt_no <= no_Expts { //Continue measurements
 
             seed := rand.NewSource(time.Now().UnixNano())
             rnd := rand.New(seed)
@@ -100,9 +93,9 @@ func main() {
 
             copy(config.CPhname[:], cp_hname)
             copy(config.CPips[:], cp_ips)
-    
+
             config.Ndps = proto.Int32(int32(no_DPs))
-            config.DPhname = make([]string, no_DPs) 
+            config.DPhname = make([]string, no_DPs)
             config.DPips = make([]string, no_DPs)
 
             copy(config.DPhname[:], dp_hname)
@@ -118,111 +111,116 @@ func main() {
 
                 sendDataToDest(configbytes, cp_hname[i], cp_ips[i]+":6100")
             }
-    
+
             //Send config to DPs
             for i := 0; i < no_DPs; i++ {
 
-     	        sendDataToDest(configbytes, dp_hname[i], dp_ips[i]+":7100")
+                sendDataToDest(configbytes, dp_hname[i], dp_ips[i]+":7100")
             }
 
             cp_step_no = ts_s_no //Set CP step no.
             dp_step_no = ts_s_no //Set DP step no.
 
-            //Channel to handle simultaneous connections
-            clients := make(chan net.Conn)
+            //Channel to handle simultaneous client connections
+            clientconn := make(chan net.Conn)
+
+            wg.Add(1) //Increment WaitGroup counter
+
+            go acceptConnections() //Accept connections
 
             loop:
 
             for{
 
-                conn, err := acceptConnections() //Accept connections
+                select {
 
-                if conn != nil { //If Data is available
+                    case conn := <- clients:
 
-                    //Parse Common Name
-                    com_name := parseCommonName(conn)
+                        //Parse Common Name
+                        com_name := parseCommonName(conn)
 
-                    if contains(dp_hname, com_name) || contains(cp_hname, com_name) { //If CPs or DPs
+                        if contains(dp_hname, com_name) || contains(cp_hname, com_name) {//If data received from CP/DP
 
-                        wg.Add(1) //Increment WaitGroup counter
+                            wg.Add(1) //Increment WaitGroup counter
 
-                        //Handle connections in separate channels
-                        go handleClients(clients, com_name)
+                            //Handle clients in separate channels
+                            go handleClients(clientconn, com_name)
 
-                        //Handle each client in separate channel
-                        clients <- conn
+                            //Add DPconnection to channel
+                            clientconn <- conn
 
-                    } else { //If not CPs or DPs  
+                        } else { //If not CPs or DPs
 
-                        conn.Close() //Close connection
-                    }
+                            conn.Close() //Close connection
+                        }
 
-                } else if err != nil {
+                    case <-finish:
 
-                    select {
+                        //Send finish signal to all CPs
+                        fmt.Println("Sending finish signal to CPs")
+                        for i := 0; i < no_CPs; i++ {
 
-                        case <-finish:
+                            signalParty(cp_hname[i], cp_ips[i], true, cp_step_no)
+                        }
 
-                            //Send finish signal to all CPs
-                            fmt.Println("Sending finish signal to CPs")
-                            for i := 0; i < no_CPs; i++ {
+                        if dp_step_no != ts_s_no + 4 { //If DPs have not finished
 
-                                signalParty(cp_hname[i], cp_ips[i], true, cp_step_no)
+                            //Send finish signal to all DPs
+                            fmt.Println("Sending finish signal to DPs")
+                            for i := 0; i < no_DPs; i++ {
+
+                                signalParty(dp_hname[i], dp_ips[i], true, dp_step_no)
                             }
+                        }
 
-                            if dp_step_no != ts_s_no + 4 { //If DPs have not finished
+                        wg.Wait()
 
-                                //Send finish signal to all DPs
-                                fmt.Println("Sending finish signal to DPs")
-                                for i := 0; i < no_DPs; i++ {
+                        if cp_step_no == ts_s_no + 11 { //Finish
 
-                                    signalParty(dp_hname[i], dp_ips[i], true, dp_step_no)
-                                }
-                            }
+                            //Finishing measurement
+                            fmt.Println("Finished measurement no. ", expt_no)
 
-                            wg.Wait()                            
+                        } else {
 
-                            if cp_step_no == ts_s_no + 11 { //Finish
+                            //Quit and Re-start measurement
+                            fmt.Println("Quitting... \n Re-starting measurement...")
 
-                                //Finishing measurement
-                                fmt.Println("Finished measurement no. ", expt_no)
+                            expt_no = expt_no - 1 //Decrement measurement no.
 
-                            } else {
+                        }
 
-                                //Quit and Re-start measurement
-                                fmt.Println("Quitting... \n Re-starting measurement...")
+                        time.Sleep(5 * time.Minute)	//Wait for CPs/DPs to shutdown gracefully and re-start
 
-                                expt_no = expt_no - 1 //Decrement measurement no.
+                        break loop
 
-                            }
-
-                            break loop
-
-                        default:
-                    }
+                    default:
                 }
             }
 
         } else {
- 
+
             var exit string //Continue response
 
             fmt.Println("Do you want to exit? (Y or N)")
             fmt.Scanf("%s", &exit)
 
             if exit == "N" || exit == "n" { //If continue with same parameters
-               
+
                 fmt.Println("Enter no. of experiments")
-                fmt.Scanf("%d", &no_Expts) 
+                fmt.Scanf("%d", &no_Expts)
 
                 expt_no = 0 //Reset measurement no.
 
             } else {
 
+                shutdownTS() //Shutdown TS gracefully
+
+                wg.Wait()
+
                 break //End Measurement
             }
         }
-    }   
+    }
 
     fmt.Println("Finished measurements. Exiting.")
 }
@@ -258,14 +256,14 @@ func signalParty(party_hname, party_ip string, fin bool, sno uint32) {
     sendDataToDest(sigb, party_hname, party_ip+port)
 }
 
-//Input: Client Socket Channel, Client common name
-//Function: Handle client connection 
-func handleClients(clients chan net.Conn, com_name string) {
+//Input: Client socket channel, Client common name
+//Function: Handle client connection
+func handleClients(clientconn chan net.Conn, com_name string) {
 
     defer wg.Done() //Decrement counter when goroutine completes
 
     //Wait for next client connection to come off queue.
-    conn := <-clients
+    conn := <-clientconn
 
     //Receive Data
     buf := receiveData(conn)
@@ -335,8 +333,8 @@ func handleClients(clients chan net.Conn, com_name string) {
                     for i := 0; i < no_DPs; i++ {
 
                         signalParty(dp_hname[i], dp_ips[i], false, dp_step_no)
-                    }         
-                               
+                    }
+
                     start = time.Now() //Data collection start time
 
                 } else if dp_step_no == ts_s_no + 2 { //Step No. 2
@@ -372,7 +370,7 @@ func handleClients(clients chan net.Conn, com_name string) {
 
                     dp_step_no += 1 //Increment DP step no.
 
-                    //Send finish signal to DPs 
+                    //Send finish signal to DPs
                     fmt.Println("Signal DPs to finish. Step No.", dp_step_no-ts_s_no)
                     for i := 0; i < no_DPs; i++ {
 
@@ -430,11 +428,11 @@ func handleClients(clients chan net.Conn, com_name string) {
 
                             signalParty(dp_hname[i], dp_ips[i], false, dp_step_no)
                         }
-       	       	    }  	
+       	       	    }
 
        	       	    config_flag = false //Set config flag
 
-                } else if cp_step_no == ts_s_no + 1 || cp_step_no == ts_s_no + 2 || cp_step_no == ts_s_no + 6 { //Step No. 1, 2 or 6 
+                } else if cp_step_no == ts_s_no + 1 || cp_step_no == ts_s_no + 2 || cp_step_no == ts_s_no + 6 { //Step No. 1, 2 or 6
 
                     cp_step_no += 1 //Increment CP step no.
 
@@ -443,7 +441,7 @@ func handleClients(clients chan net.Conn, com_name string) {
                     //Send signal to 1st CP to broadcast
                     fmt.Println("Sending signal to", cp_hname[cp_bcast], "Step No.", cp_step_no-ts_s_no)
                     signalParty(cp_hname[cp_bcast], cp_ips[cp_bcast], false, cp_step_no)
-                               
+
                 } else if cp_step_no == ts_s_no + 3 || cp_step_no == ts_s_no + 4 || cp_step_no == ts_s_no + 7 || cp_step_no == ts_s_no + 8 || cp_step_no == ts_s_no + 9 { //Step No. 2, 3, 4, 7, 8, or 9 (Regular sequential CP broadcast)
 
                     if cp_bcast == no_CPs - 1 { //If Last CP has broadcasted
@@ -455,7 +453,7 @@ func handleClients(clients chan net.Conn, com_name string) {
                     } else {
 
                         cp_bcast += 1 //Set broadcasting CP as next CP
-                    } 
+                    }
 
                     //Send signal to next CP to broadcast
                     fmt.Println("Sending signal to", cp_hname[cp_bcast], "Step No.", cp_step_no-ts_s_no)
@@ -469,7 +467,7 @@ func handleClients(clients chan net.Conn, com_name string) {
 
                         cp_bcast = -1 //Wait for CPs acknowledgement
 
-                        if data_flag == true {//If data flag set                                       
+                        if data_flag == true {//If data flag set
 
                             dp_step_no += 1 //Increment DP step no.
 
@@ -482,7 +480,7 @@ func handleClients(clients chan net.Conn, com_name string) {
        	       	        }
 
                         data_flag = true //Set data flag
-                       
+
                     } else {
 
                         cp_bcast += 1 //Set broadcasting CP as next CP
@@ -499,7 +497,7 @@ func handleClients(clients chan net.Conn, com_name string) {
                         cp_step_no += 1 //Increment CP step no.
 
                         shutdownTS() //Shutdown TS gracefully
-                        
+
                     } else {
 
                         cp_bcast += 1 //Set broadcasting CP as next CP
@@ -567,6 +565,7 @@ func initValues() {
     cp_bcast = 0 //Next CP to broadcast
     ln = nil //Server listener
     finish = make(chan bool) //Channel to send finish flag
+    clients = make(chan net.Conn) //Channel to handle simultaneous client connections
     mutex = &sync.Mutex{} //Mutex to lock common client variable
     wg = &sync.WaitGroup{} //WaitGroup to wait for all goroutines to shutdown
 }
@@ -622,35 +621,41 @@ func sendDataToDest(data []byte, dst_hname string, dst_addr string) {
 //Input: TS common name
 //Output: Socket
 //Function: Accept new connections in  Socket
-func acceptConnections() (*tls.Conn, error) {
-    //Create Server Socket
-    cert, err1 := tls.LoadX509KeyPair("certs/" + ts_cname + ".cert", "private/" + ts_cname + ".key")
-    checkError(err1)
-    
-    //Add CA certificate to pool
-    caCert, _ := ioutil.ReadFile("../CA/certs/ca.cert")
-    caCertPool := x509.NewCertPool()
-    caCertPool.AppendCertsFromPEM(caCert)
-    
-    //Create TLS Listener and Accept Connection
-    config := tls.Config{Certificates: []tls.Certificate{cert}, ClientCAs: caCertPool, ClientAuth: tls.RequireAndVerifyClientCert,}
-    conn, err := ln.Accept()
+func acceptConnections() {
 
-    var sock *tls.Conn //Client socket
+    defer wg.Done() //Decrement counter when goroutine completes
 
-    //If error
-    if err != nil {
+    for {
 
-        return nil, err
+        //Create Server Socket
+        cert, err1 := tls.LoadX509KeyPair("certs/" + ts_cname + ".cert", "private/" + ts_cname + ".key")
+        checkError(err1)
 
-    } else { //If not error
+        //Add CA certificate to pool
+        caCert, _ := ioutil.ReadFile("../CA/certs/ca.cert")
+        caCertPool := x509.NewCertPool()
+        caCertPool.AppendCertsFromPEM(caCert)
 
-        file, _ := conn.(*net.TCPConn).File()
-        err1 = syscall.SetsockoptInt(int(file.Fd()), syscall.SOL_SOCKET, syscall.SO_REUSEADDR, 1)
-        sock = tls.Server(conn, &config)
+        //Create TLS Listener and Accept Connection
+        config := tls.Config{Certificates: []tls.Certificate{cert}, ClientCAs: caCertPool, ClientAuth: tls.RequireAndVerifyClientCert,}
+        conn, err := ln.Accept()
+
+        var sock *tls.Conn //Client socket
+
+        //If error
+        if err != nil {
+
+            break
+
+        } else { //If not error
+
+            file, _ := conn.(*net.TCPConn).File()
+            err1 = syscall.SetsockoptInt(int(file.Fd()), syscall.SOL_SOCKET, syscall.SO_REUSEADDR, 1)
+            sock = tls.Server(conn, &config)
+
+            clients <- sock
+        }
     }
-
-    return sock, err
 }
 
 //Input: Socket, Number of Bytes
@@ -689,9 +694,9 @@ func shutdownTS() {
 func contains(pl []string, p string) bool {
 
     for _, party := range pl {
-      
+
         if party == p {
-          
+
             return true
         }
     }
