@@ -27,7 +27,6 @@ import (
     "PSC/CP/schnorr/schnorrkey"
     "PSC/CP/cpres"
     "PSC/TS/tsmsg"
-    "runtime"
     "strconv"
     "sync"
     "syscall"
@@ -150,6 +149,8 @@ func main() {
                         //Receive Data
                         buf := receiveData(conn)
 
+                        conn.Close() //Close connection
+
                         if ts_config_flag == true { //If TS configuration flag set
 
                             start = time.Now()
@@ -180,10 +181,9 @@ func main() {
 
                                 mutex.Lock() //Lock mutex
 
-                                if *sig.SNo == int32(ts_s_no+step_no) && cp_bcast == cp_no { //Check TS step no. and broadcasting CP
+                                if *sig.SNo == int32(ts_s_no+step_no) && cp_bcast == cp_no { //Check TS step no. a$
 
                                     broadcastCPData() //Broadcast CP data
-                                    fmt.Println("No. of go routines", runtime.NumGoroutine())
 
                                 } else { //Wrong signal from TS
 
@@ -208,24 +208,6 @@ func main() {
                     wg.Wait()
 
                     if step_no == 11 { //Finish
-
-                        var agg int64 //Aggregate
-                        agg = 0
-
-                        //Iterate over all Counters
-                        for i := int64(0); i < b+n; i++ {
-
-                            //If not g^0
-                            if e_f := C[i].Equal(suite.Point().Null()); e_f == false {
-
-                                //Add 1 to Aggregate
-                                agg += 1
-                            }
-                        }
-
-                        agg -= int64(n/2)
-
-                        fmt.Printf("Aggregate = %d \n", agg)
 
                         //Finishing measurement
                         fmt.Println("Finished measurement.")
@@ -275,6 +257,8 @@ func handleDPs(dpconn chan net.Conn) {
 
     //Receive Data
     buf := receiveData(conn)
+
+    conn.Close() //Close connection
 
     //Parse DP Response
     resp := new(DPres.Response)
@@ -351,6 +335,8 @@ func handleCPs(cpconn chan net.Conn, com_name string) {
 
     //Receive Data
     buf := receiveData(conn)
+
+    conn.Close() //Close connection
 
     mutex.Lock() //Lock mutex
 
@@ -470,8 +456,7 @@ func handleCPs(cpconn chan net.Conn, com_name string) {
 	            b_j[no_cp_res] = buf[9:9+l] //Store Signed Message
                     //Store response
                     cp_res_byte = make([]byte, len(buf[9+l:]))
-                    i := copy(cp_res_byte[:], buf[9+l:])
-                    fmt.Println("Buffer change",len(buf[9+l:]),i)
+                    copy(cp_res_byte[:], buf[9+l:])
 
                     fmt.Println("     Rebroadcasting msg sent by CP", int(cp_bcast))
                     sendDataN_1(cp_s_no+step_no-2, int(cp_bcast), b_j[no_cp_res]) //Re-Broadcasting
@@ -514,8 +499,7 @@ func handleCPs(cpconn chan net.Conn, com_name string) {
 
                 //Parse CP Response
                 cp_resp := new(CPres.Response)
-                err := proto.Unmarshal(cp_res_byte, cp_resp)
-                fmt.Println("Unmarshal Buffer", err)
+                proto.Unmarshal(cp_res_byte, cp_resp)
 
                 if step_no == 4 { //If Step No. is 4
 
@@ -773,8 +757,41 @@ func handleCPs(cpconn chan net.Conn, com_name string) {
                 //If Last CP
                 if cp_bcast == no_CPs - 1 {
 
-                    fmt.Println("Sending TS signal. Bcast CP", cp_bcast, "Step No.", step_no)
-                    sendTSSignal(ts_s_no+step_no) //Send signal to TS
+                    if step_no != 10 {
+
+                        fmt.Println("Sending TS signal. Bcast CP", cp_bcast, "Step No.", step_no)
+                        sendTSSignal(ts_s_no+step_no) //Send signal to TS
+
+                    } else {
+
+                        var agg int64 //Aggregate
+                        agg = 0
+
+                        //Iterate over all Counters
+                        for i := int64(0); i < b+n; i++ {
+
+                            //If not g^0
+                            if e_f := C[i].Equal(suite.Point().Null()); e_f == false {
+
+                                //Add 1 to Aggregate
+                                agg += 1
+                            }
+                        }
+
+                        agg -= int64(n/2)
+
+                        fmt.Printf("Aggregate = %d \n", agg)
+
+                        //Assign aggregated result
+                        result := new(TSmsg.Result)
+                        result.Agg = proto.String(strconv.Itoa(int(agg)))
+
+                        //Convert to Bytes
+                        resultb, _ := proto.Marshal(result)
+
+                        //Send signal to TS
+                        sendDataToDest(resultb, ts_hname, ts_ip+":5100")
+                    }
 
                     cp_bcast = 0 //Set CP0 as Broadcasting CP
 
@@ -1174,8 +1191,41 @@ func broadcastCPData() {
             //If Last CP
             if cp_bcast == no_CPs - 1 {
 
-                fmt.Println("Sending TS signal. Bcast CP", cp_bcast, "Step No.", step_no)
-                sendTSSignal(ts_s_no+step_no) //Send signal to TS
+                if step_no != 10 {
+
+                    fmt.Println("Sending TS signal. Bcast CP", cp_bcast, "Step No.", step_no)
+                    sendTSSignal(ts_s_no+step_no) //Send signal to TS
+
+                } else {
+
+                    var agg int64 //Aggregate
+                    agg = 0
+
+                    //Iterate over all Counters
+                    for i := int64(0); i < b+n; i++ {
+
+                        //If not g^0
+                        if e_f := C[i].Equal(suite.Point().Null()); e_f == false {
+
+                            //Add 1 to Aggregate
+                            agg += 1
+                        }
+                    }
+
+                    agg -= int64(n/2)
+
+                    fmt.Printf("Aggregate = %d \n", agg)
+
+                    //Assign aggregated result
+                    result := new(TSmsg.Result)
+                    result.Agg = proto.String(strconv.Itoa(int(agg)))
+
+                    //Convert to Bytes
+                    resultb, _ := proto.Marshal(result)
+
+                    //Send signal to TS
+                    sendDataToDest(resultb, ts_hname, ts_ip+":5100")
+                }
 
                 cp_bcast = 0 //Set CP0 as Broadcasting CP
 
