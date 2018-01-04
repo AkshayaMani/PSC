@@ -19,9 +19,14 @@ message Config {
   repeated string DPhname = 9;
   repeated string DPips = 10;
   required int64 Tsize = 11;
+  required string Query = 12;
 }
 
 message Signal {
   required int32 SNo = 1;
   required bool Fflag = 2;
+}
+
+message Result {
+  required string Agg = 2;
 }
