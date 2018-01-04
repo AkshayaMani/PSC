@@ -15,7 +15,6 @@ import (
     "github.com/golang/protobuf/proto"
     "io"
     "io/ioutil"
-    "math"
     "math/rand"
     "net"
     "os"
@@ -25,19 +24,23 @@ import (
     "time"
 )
 
-const no_CPs = 3 //No.of CPs
-const no_DPs = 5 //No. of DPs
-const b = 500000 //Hash table size
-var no_Expts = 1 //No. of measurements
-var cp_hname = []string{"CP1", "CP2", "CP3"}//, "CP4", "CP5"} //CP hostnames
-var dp_hname = []string{"DP1", "DP2", "DP3", "DP4", "DP5"}//, "DP1", "DP1", "DP1", "DP1", "DP1", "DP1", "DP1", "DP1", "DP1", "DP1", "DP1", "DP1", "DP1", "DP1", "DP1"} //DP hostnames
-var cp_ips = []string{"10.176.5.52", "10.176.5.53", "10.176.5.54"}//, "10.176.5.23", "10.176.5.24"} //CP IPs
-var dp_ips = []string{"10.176.5.16", "10.176.5.17", "10.176.5.18", "10.176.5.19", "10.176.5.20"}//, "10.176.5.17", "10.176.5.17", "10.176.5.17", "10.176.5.17", "10.176.5.17", "10.176.5.17", "10.176.5.17", "10.176.5.17", "10.176.5.17", "10.176.5.17", "10.176.5.17", "10.176.5.17", "10.176.5.17", "10.176.5.17", "10.176.5.17"} //DP IPs
-var ts_cname string //TS common name
+var no_CPs int //No.of CPs
+var no_DPs int //No. of DPs
+var b int64 //Hash table size
+var no_Expts int //No. of measurements
+var epsilon float32 //Epsilon
+var delta float32 //Delta
 var epoch int //Epoch
+var query string //Query
+var cp_hname []string //CP hostnames
+var dp_hname []string //DP hostnames
+var cp_ips []string //CP IPs
+var dp_ips []string //DP IPs
+var ts_cname string //TS common name
 var start time.Time //Data collection start time
 var ln net.Listener //Server listener
 var finish chan bool //Channel to send finish flag
+var agg string //Aggregated result
 var clients chan net.Conn //Channel to handle simultaneous client connections
 var f_flag bool //Finish flag
 var config_flag bool //Configuration flag
@@ -53,7 +56,9 @@ var wg = &sync.WaitGroup{} //WaitGroup to wait for all goroutines to shutdown
 
 func main() {
 
-    ts_ip, epsilon, delta := parseCommandline(os.Args) //Parse epoch, TS common name, TS IP and privacy parameters - epsilon and delta
+    ts_ip, config_file := parseCommandline(os.Args) //Parse TS common name, TS IP, configuration file path
+
+    assignConfig(config_file) //Assign configuration parameters
 
     expt_no := 0 //Set measurement no. to 0
 
@@ -102,6 +107,7 @@ func main() {
             copy(config.DPips[:], dp_ips)
 
             config.Tsize = proto.Int64(int64(b))
+            config.Query = proto.String(query)
 
             //Convert to Bytes
             configbytes, _ := proto.Marshal(config)
@@ -189,8 +195,6 @@ func main() {
 
                         }
 
-                        time.Sleep(5 * time.Minute)	//Wait for CPs/DPs to shutdown gracefully and re-start
-
                         break loop
 
                     default:
@@ -268,9 +272,7 @@ func handleClients(clientconn chan net.Conn, com_name string) {
     //Receive Data
     buf := receiveData(conn)
 
-    //Parse signal
-    sig := new(TSmsg.Signal)
-    proto.Unmarshal(buf, sig)
+    conn.Close() //Close connection
 
     mutex.Lock() //Lock mutex
 
@@ -278,6 +280,10 @@ func handleClients(clientconn chan net.Conn, com_name string) {
 
         //If Data Received from DP
         if contains(dp_hname, com_name) {
+
+            //Parse signal
+            sig := new(TSmsg.Signal)
+            proto.Unmarshal(buf, sig)
 
             //If finish flag not set
             if *sig.Fflag == false {
@@ -341,7 +347,7 @@ func handleClients(clientconn chan net.Conn, com_name string) {
 
                     end := time.Since(start).Hours()
 
-                    if end >= float64(epoch) {//If data collected for an epoch
+                    if end >= 24.0 * float64(epoch) {//If data collected for an epoch
 
                         if data_flag == true {//If data flag set
 
@@ -383,30 +389,61 @@ func handleClients(clientconn chan net.Conn, com_name string) {
 
         } else if contains(cp_hname, com_name) { //If Data Received from CP
 
-            //If finish flag not set
-            if *sig.Fflag == false {
+            if cp_step_no == ts_s_no + 10 && cp_bcast == no_CPs - 1 { //Step No. 10 and last CP has broadcasted
 
-                //Verify Step No. and Session No.
-                if *sig.SNo == int32(cp_step_no) {
+                //Parse result
+                result := new(TSmsg.Result)
+                proto.Unmarshal(buf, result)
 
-                    no_cp_res = no_cp_res + 1 //Increment no. of CP responded
+                if no_cp_res != 0 { //Compare aggregate received from previous CP
 
-                } else { //Wrong acknowledgement
+                    if agg != *result.Agg { //Wrong aggregate
 
-                    fmt.Println("Error: Wrong acknowledgement by CP ", com_name)
+                        fmt.Println("Error: Wrong aggregate value by CP ", com_name)
+
+                        shutdownTS() //Shutdown TS gracefully
+
+                        return
+                    }
+
+                } else {
+
+                    agg = *result.Agg //Assign aggregate
+                }
+
+                no_cp_res = no_cp_res + 1 //Increment no. of CP responded
+
+            } else {
+
+                //Parse signal
+                sig := new(TSmsg.Signal)
+                proto.Unmarshal(buf, sig)
+
+                //If finish flag not set
+                if *sig.Fflag == false {
+
+                    //Verify Step No. and Session No.
+                    if *sig.SNo == int32(cp_step_no) {
+
+                        no_cp_res = no_cp_res + 1 //Increment no. of CP responded
+
+                    } else { //Wrong acknowledgement
+
+                        fmt.Println("Error: Wrong acknowledgement by CP ", com_name)
+
+                        shutdownTS() //Shutdown TS gracefully
+
+                        return
+                    }
+
+                } else if *sig.Fflag == true {//Error
+
+                    fmt.Println("Error: CP ", com_name, "sent quit ")
 
                     shutdownTS() //Shutdown TS gracefully
 
                     return
                 }
-
-            } else if *sig.Fflag == true {//Error
-
-                fmt.Println("Error: CP ", com_name, "sent quit ")
-
-                shutdownTS() //Shutdown TS gracefully
-
-                return
             }
 
             //If all CPs have responded
@@ -494,6 +531,15 @@ func handleClients(clientconn chan net.Conn, com_name string) {
 
                     if cp_bcast == no_CPs - 1 { //If Last CP has broadcasted
 
+                        result := new(TSmsg.Result)
+                        result.Agg = proto.String(agg)
+
+                        //Write to config file
+                        out, err := proto.Marshal(result)
+                        checkError(err)
+                        err = ioutil.WriteFile(query+time.Now().Local().Format("2006-01-02 15:04:05"), out, 0644)
+                        checkError(err)
+
                         cp_step_no += 1 //Increment CP step no.
 
                         shutdownTS() //Shutdown TS gracefully
@@ -517,36 +563,74 @@ func handleClients(clientconn chan net.Conn, com_name string) {
 }
 
 //Input: Command-line arguments
+//Output: TS IP, Configuration file path
 //Function: Parse Command-line arguments
-func parseCommandline(arg []string) (string, float64, float64) {
+func parseCommandline(arg []string) (string, string) {
 
     var ts_ip string //TS IP
-    var epsilon, delta float64 //Privacy parameters - epsilon & delta
+    var config_file string //Config file path
+    var e_flag = false //Exit flag
 
     flag.StringVar(&ts_cname, "t", "", "TS common name (required)")
     flag.StringVar(&ts_ip, "i", "", "TS IP (required)")
-    flag.IntVar(&epoch, "h", 0, "Epoch (in hours)")
-    flag.Float64Var(&epsilon, "e", 0.3, "Privacy parameter - epsilon")
-    flag.Float64Var(&delta, "d", math.Pow(10, -12), "Privacy parameter - delta")
+    flag.StringVar(&config_file, "c", "config/config.params", "Config file path")
+    flag.IntVar(&no_Expts, "e", 1, "No. of experiments")
 
     flag.Parse()
 
-    if ts_cname == "" {
+    if ts_cname == "" || ts_ip == "" {
 
         fmt.Println("Argument required:")
-        fmt.Println("     -t string")
-        fmt.Println("     TS common name (Required)")
-        os.Exit(0) //Exit
+        e_flag = true //Set exit flag
 
-    } else if ts_ip == "" {
+        if ts_cname == "" {
 
-        fmt.Println("Argument required:")
-        fmt.Println("     -i string")
-        fmt.Println("     TS IP (Required)")
+            fmt.Println("   -c string")
+            fmt.Println("      TS common name (Required)")
+        }
+
+        if ts_ip == "" {
+
+            fmt.Println("   -i string")
+            fmt.Println("      TS IP (Required)")
+        }
+    }
+
+    if e_flag == true {//If exit flag set
+
         os.Exit(0) //Exit
     }
 
-    return ts_ip, epsilon, delta
+    return ts_ip, config_file
+}
+
+//Input: Configuration file path
+//Function: Assign configuration parameters
+func assignConfig(config_file string) {
+
+    //Read configuration file
+    in, err := ioutil.ReadFile(config_file)
+    checkError(err)
+    config := &TSmsg.Config{}
+    err = proto.Unmarshal(in, config)
+    checkError(err)
+
+    //Assign configuration parameters
+    no_CPs = int(*config.Ncps) //No.of CPs
+    no_DPs = int(*config.Ndps) //No. of DPs
+    epoch = int(*config.Epoch) //Epoch
+    query = *config.Query //Query
+    epsilon = *config.Epsilon //Epsilon
+    delta = *config.Delta //Delta
+    b = *config.Tsize //Hash table size
+    cp_hname  = make([]string, no_CPs) //CP hostnames
+    cp_ips = make([]string, no_CPs) //CP IPs
+    copy(cp_hname[:], config.CPhname) //Assign CP hostnames
+    copy(cp_ips[:], config.CPips) //Assign CP  IPs
+    dp_hname  = make([]string, no_DPs) //DP hostnames
+    dp_ips = make([]string, no_DPs) //DP IPs
+    copy(dp_hname[:], config.DPhname) //Assign DP hostnames
+    copy(dp_ips[:], config.DPips) //Assign DP IPs
 }
 
 //Function: Initialize variables
@@ -565,6 +649,7 @@ func initValues() {
     cp_bcast = 0 //Next CP to broadcast
     ln = nil //Server listener
     finish = make(chan bool) //Channel to send finish flag
+    agg	= "" //Aggregated result
     clients = make(chan net.Conn) //Channel to handle simultaneous client connections
     mutex = &sync.Mutex{} //Mutex to lock common client variable
     wg = &sync.WaitGroup{} //WaitGroup to wait for all goroutines to shutdown
