@@ -537,7 +537,7 @@ func handleClients(clientconn chan net.Conn, com_name string) {
                         //Write to config file
                         out, err := proto.Marshal(result)
                         checkError(err)
-                        err = ioutil.WriteFile("result/"query+time.Now().Local().Format("2006-01-02")+"_"+query+time.Now().Local().Format("15:04:05"), out, 0644)
+                        err = ioutil.WriteFile("result/"+query+time.Now().Local().Format("2006-01-02")+"_"+query+time.Now().Local().Format("15:04:05"), out, 0644)
                         checkError(err)
 
                         cp_step_no += 1 //Increment CP step no.
