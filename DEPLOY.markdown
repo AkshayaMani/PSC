@@ -63,8 +63,8 @@ Then run PSC in Tally Server mode:
 
 ##### Optional arguments:
 ```
-    -c Configuration file path
-    -e No. of experiments
+    -c   Configuration file path
+    -e   No. of experiments
 ```
 
 ## Computation Parties
@@ -168,7 +168,7 @@ Then run PSC in Data Party mode:
 
 ##### Optional arguments:
 ```
-    -ca Tor control port listen address
-    -cp Tor control port
-    -pf Tor control hashed password file path
+    -ca   Tor control port listen address
+    -cp   Tor control port
+    -pf   Tor control hashed password file path
 ```
