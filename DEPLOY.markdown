@@ -61,9 +61,11 @@ Then run PSC in Tally Server mode:
     go run ts.go -t "<TS_common_name>" -i "<TS_IP>"
 ```
 
-Optional arguments:
+##### Optional arguments:
+```
     -c Configuration file path
     -e No. of experiments
+```
 
 ## Computation Parties
 
@@ -164,7 +166,9 @@ Then run PSC in Data Party mode:
     go run ts.go -d "<DP_common_name>" -i "<DP_IP>"
 ```
 
-Optional arguments:
+##### Optional arguments:
+```
     -ca Tor control port listen address
     -cp Tor control port
     -pf Tor control hashed password file path
+```
