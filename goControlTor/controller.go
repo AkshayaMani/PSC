@@ -87,9 +87,7 @@ func (t *TorControl) ReceiveCommand() (string, error) {
 
 func (t *TorControl) SendCommand(command string) error {
 
-    fmt.Println("sending...")
     _, err := t.controlConn.Write([]byte(command))
-    fmt.Println(command)
 
     if err != nil {
 
@@ -206,7 +204,7 @@ func (t *TorControl) CommandParse(message string) ([]string, string, error) {
 
         if parts[1] != t.event {
 
-            //fmt.Println("Unwanted event type", parts[1])
+            fmt.Println("Unwanted event type", parts[1])
 
         } else if len(parts) <= 2 {
 

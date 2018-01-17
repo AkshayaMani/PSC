@@ -363,7 +363,7 @@ func handleClients(clientconn chan net.Conn, com_name string) {
 
                         data_flag = true //Set data flag
 
-                    } else if end < float64(epoch) { //Data not collected for an epoch - error
+                    } else if end < 24.0 * float64(epoch) { //Data not collected for an epoch - error
 
                         fmt.Println("Error: Data not collected for an epoch")
 
@@ -537,7 +537,7 @@ func handleClients(clientconn chan net.Conn, com_name string) {
                         //Write to config file
                         out, err := proto.Marshal(result)
                         checkError(err)
-                        err = ioutil.WriteFile(query+time.Now().Local().Format("2006-01-02 15:04:05"), out, 0644)
+                        err = ioutil.WriteFile("result/"query+time.Now().Local().Format("2006-01-02")+"_"+query+time.Now().Local().Format("15:04:05"), out, 0644)
                         checkError(err)
 
                         cp_step_no += 1 //Increment CP step no.
