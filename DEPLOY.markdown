@@ -41,7 +41,7 @@ Set the PSC parameters in PSC/TS/config/Gen_Config.go:
     var query = "ExitFirstLevelDomainWebInitialStream" //Query
 ```
 
-Be careful while collecting and releasing PSC results: the configured epsilon and delta must protect a typical user's activity over a long enough period. And the collection period must be long enough to $
+Be careful while collecting and releasing PSC results: the configured epsilon and delta must protect a typical user's activity over a long enough period. And the collection period must be long enough to aggregate usage from many users (we use multiple days).
 
 PSC is not designed for automated collection and results release: a long enough series of results can identify the activity of a single user.
 
@@ -80,7 +80,7 @@ Run PSC in Computation Party mode:
 
 ## Data Parties
 
-You need one PrivCount Data Party per tor relay.
+You need one PSC Data Party per tor relay.
 
 ### Configuration
 
