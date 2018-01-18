@@ -1,6 +1,6 @@
 # CA Key generation
 
-The CA needs a few files to operate, one to keep track of the last serial number used by the CA, each certificate must have a unique serial number, and another file to record which certificates have been issued:
+The CA needs a few files to operate: one to keep track of the last serial number used by the CA (each certificate must have a unique serial number) and another file to record which certificates have been issued:
 
 ```
     sudo sh -c "echo '01' > CA/serial"
@@ -46,7 +46,7 @@ Also, add default values for country, province, organization, etc.:
     emailAddress_max                = 40
 ```
 
-Generate the root CA key: (Use a random <passphrase>)
+Generate the root CA key: (Use a random passphrase)
 
 ```
     sudo openssl genrsa -aes256 -out ca.key 4096
@@ -72,7 +72,7 @@ Add the root certificate and key to the destined folders:
     sudo mv ca.cert PSC/CA/certs/
 ```
 
-Next create a user key and a certificate signing request in one step: (Use a random <passphrase>)
+Next create a user key and a certificate signing request in one step: (Use a random passphrase)
 
 ```
     sudo openssl req -newkey rsa:4096 -keyout <DP_common_name>.key -out <DP_common_name>.csr -config openssl.cnf -days 3650

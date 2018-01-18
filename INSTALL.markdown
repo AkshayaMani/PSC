@@ -24,7 +24,7 @@ A PSC network consists of a Tally Server (TS), at least two Computation Parties 
 
 ### Install protocol buffers
 
-    Download protocol buffers compiler from https://developers.google.com/protocol-buffers/docs/downloads.html and follow the instructions in the README to install
+Download protocol buffers compiler from https://developers.google.com/protocol-buffers/docs/downloads.html and follow the instructions in the README to install
 
 ### Install PSC dependancies
 
@@ -47,7 +47,7 @@ A PSC network consists of a Tally Server (TS), at least two Computation Parties 
 
     nv off
 
-## Installing a PrivCount-patched Tor (Data Parties) dependancies
+## Installing PrivCount-patched Tor (Data Parties) dependencies
 
 A custom compiled PrivCount-patched Tor can be used to run a Data Party.
 
