@@ -8,7 +8,7 @@ The CA needs a few files to operate, one to keep track of the last serial number
     sudo cp /etc/ssl/openssl.cnf openssl.cnf
 ```
 
-The third file is a CA configuration file. Though not strictly necessary, it is very convenient when issuing multiple certificates. Edit openssl.cnf, and change the following fields: Here, directory <usr> must be directory TS, CP, or DP depending on the keys you want to generate.
+The third file is a CA configuration file. Though not strictly necessary, it is very convenient when issuing multiple certificates. Edit openssl.cnf, and change the following fields: Here, directory usr must be directory TS, CP, or DP depending on the keys you want to generate.
 
 ```
     [ CA_default ]
@@ -65,7 +65,7 @@ Next, create the self-signed root certificate:
     sudo openssl req -new -x509 -days 3650 -key ca.key -out ca.cert -config openssl.cnf
 ```
 
-Now install the root certificate and key:
+Add the root certificate and key to the destined folders:
 
 ```
     sudo mv ca.key PSC/CA/private/
@@ -91,13 +91,13 @@ Using the CSR, generate a certificate signed by the CA:
     sudo openssl ca -in <DP_common_name>.csr -config openssl.cnf
 ```
  
-There should now be a new file, PSC/<usr>/certs/<index>.pem, containing the same output. Rename it:
+Rename certificate file:
 
 ```
     sudo mv PSC/<usr>/certs/<index>.pem <usr>/certs/<DP_common_name>.cert
 ```
 
-Now install the user certificate and key:
+Add the user certificate and key in the destined folders:
 
 ```
     sudo mv <DP_common_name>.csr <usr>/csr/
