@@ -14,7 +14,20 @@ Verify CA certificates through a trust chain. Add all CA certificates to PSC/CA/
 
 ## Generate Public key pair (TS, CP, DP)
 
-Use the network CA key to generate public key pairs for any CP(s), DP(s), or TS in the network. See CAInstructions.markdown for details. 
+You can use PSC/keypair.sh to generate public key pairs for any CP(s), DP(s), or TS in the network. 
+
+```
+    ./keypair.sh <usr> <common_name>
+```
+
+### Arguments:
+```
+    <usr>           "CP", "DP" or "TS"
+    <common_name>   Common name
+```
+
+Refer CAInstructions.markdown for detailed step by step instruction. 
+
 PSC uses the common name in the certificate to uniquely identify a node. So, forward the <common_name> and <ip> of the CP(s) and DP(s) to the TS.
 
 ## Tally Server
