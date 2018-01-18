@@ -28,10 +28,6 @@ Restart your terminal.
 
     nv on <goenvironment_name>
 
-### Install protocol buffers
-
-Download protocol buffers compiler from https://developers.google.com/protocol-buffers/docs/downloads.html and follow the instructions in the README to install
-
 ### Install PSC dependancies
 
     go get -u github.com/golang/protobuf/protoc-gen-go
