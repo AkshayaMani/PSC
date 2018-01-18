@@ -10,6 +10,12 @@ A PSC network consists of a Tally Server (TS), at least two Computation Parties 
     cd envirius
     make install
 
+#### Add following to your ~/.bashrc:
+
+    [ -f "$HOME/.envirius/nv" ] && . ~/.envirius/nv
+
+#### Restart your terminal
+
 ### Check available versions of go
 
     nv ls-versions --go-prebuilt
