@@ -8,7 +8,7 @@ The CA needs a few files to operate, one to keep track of the last serial number
     sudo cp /etc/ssl/openssl.cnf openssl.cnf
 ```
 
-The third file is a CA configuration file. Though not strictly necessary, it is very convenient when issuing multiple certificates. Edit openssl.cnf, and change the following fields: <Here, directory <usr> must be directory TS, CP, or DP depending on the keys you want to generate.
+The third file is a CA configuration file. Though not strictly necessary, it is very convenient when issuing multiple certificates. Edit openssl.cnf, and change the following fields: Here, directory <usr> must be directory TS, CP, or DP depending on the keys you want to generate.
 
 ```
     [ CA_default ]
