@@ -1,14 +1,13 @@
-# CA Key generation
+# CA Key generation (OpenSSL 1.0.2g)
 
 The CA needs a few files to operate: one to keep track of the last serial number used by the CA (each certificate must have a unique serial number) and another file to record which certificates have been issued:
 
 ```
     sudo sh -c "echo '01' > CA/serial"
     sudo touch CA/index.txt
-    sudo cp /etc/ssl/openssl.cnf openssl.cnf
 ```
 
-The third file is a CA configuration file. Though not strictly necessary, it is very convenient when issuing multiple certificates. Edit openssl.cnf, and change the following fields: Here, directory usr must be directory TS, CP, or DP depending on the keys you want to generate.
+The third file is a CA configuration file (refer PSC/CA/openssl.cnf). Though not strictly necessary, it is very convenient when issuing multiple certificates. Edit openssl.cnf, and change the following fields: Here, directory usr must be directory TS, CP, or DP depending on the keys you want to generate.
 
 ```
     [ CA_default ]
