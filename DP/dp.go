@@ -12,7 +12,6 @@ import (
     "encoding/binary"
     "flag"
     "fmt"
-    "github.com/armon/go-radix"
     "gopkg.in/dedis/crypto.v0/abstract"
     "gopkg.in/dedis/crypto.v0/nist"
     "github.com/golang/protobuf/proto"
@@ -62,12 +61,12 @@ var cs [][]abstract.Scalar //Cipher share
 var wg = &sync.WaitGroup{} //WaitGroup to wait for all goroutines to shutdown
 
 var torControl = &goControlTor.TorControl{} //Tor control port connection
-var domain_radix = new(radix.Tree) //Suffix match tree
+var domain_map = map[string]bool{} //Domain map
 var message chan string //Channel to receive message from Tor control port
 var q_to_e = map[string]string{ //Map query
 
     "ExitFirstLevelDomainWebInitialStream": "PRIVCOUNT_STREAM_ENDED",
-    "ExitDomainSuffixMatchWebInitialStream": "PRIVCOUNT_STREAM_ENDED",
+    "ExitFirstLevelDomainAlexa1MWebInitialStream": "PRIVCOUNT_STREAM_ENDED",
 }
 
 func main() {
@@ -192,11 +191,11 @@ func handleTS(conn net.Conn, com_name string) {
 
                 assignConfig(config) //Assign configuration
 
-                if query == "ExitDomainSuffixMatchWebInitialStream" {
+                if query == "ExitFirstLevelDomainAlexa1MWebInitialStream" {
 
                     domain_list := match.LoadDomainList("domain-top-fld-1m.txt")
 
-                    domain_radix = match.SuffixMatchCreateRadix(domain_list, ".")
+                    domain_map = match.ExactMatchCreateMap(domain_list)
                 }
 
                 fmt.Println("Sending TS signal. Step No.", step_no)
@@ -434,18 +433,17 @@ func handle_stream_event(event []string, query string) {
 
     if host_ip_version == "Hostname" && stream_web == "Web" && stream_circ == "Initial" {
 
-        if query == "ExitFirstLevelDomainWebInitialStream" {
+        fld, _ := publicsuffix.EffectiveTLDPlusOne(strings.ToLower(remote_host))
 
-           if fld, _ := publicsuffix.EffectiveTLDPlusOne(remote_host); fld != "" {
+        if query == "ExitFirstLevelDomainWebInitialStream" && fld != "" {
 
-               incrementCounter(fld) //Increment counter
-           }
+           incrementCounter(fld) //Increment counter
 
-        } else if query == "ExitDomainSuffixMatchWebInitialStream" {
+        } else if query == "ExitFirstLevelDomainAlexa1MWebInitialStream" && fld != "" {
 
-            if suffix_match := match.SuffixMatch(domain_radix, remote_host, "."); suffix_match != "" {
+            if exact_match := match.ExactMatch(domain_map, fld); exact_match != "" {
 
-                incrementCounter(suffix_match) //Increment counter
+                incrementCounter(exact_match) //Increment counter
             }
         }
     }
