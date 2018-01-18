@@ -72,7 +72,7 @@ Add the root certificate and key to the destined folders:
     sudo mv ca.cert PSC/CA/certs/
 ```
 
-Next create a user key and a certificate signing request in one step: (Use a random <passphrase>)
+Next create a user key and a certificate signing request in one step: (Use a random passphrase)
 
 ```
     sudo openssl req -newkey rsa:4096 -keyout <DP_common_name>.key -out <DP_common_name>.csr -config openssl.cnf -days 3650
