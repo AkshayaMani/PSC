@@ -1,3 +1,11 @@
+/*
+Created on Apr 18, 2017
+
+@author: Akshaya Mani, Georgetown University
+
+See LICENSE for licensing information
+*/
+
 package logging
 
 import (
