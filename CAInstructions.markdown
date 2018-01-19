@@ -48,27 +48,27 @@ Also, add default values for country, province, organization, etc.:
 Generate the root CA key: (Use a random passphrase)
 
 ```
-    sudo openssl genrsa -aes256 -out ca.key 4096
+    sudo openssl genrsa -aes256 -out <ca_name>.key 4096
 ```
 
 Create the insecure key, the one without a passphrase, and shuffle the key names:
 
 ```
-    openssl rsa -in ca.key -out ca.key.insecure
-    sudo mv ca.key.insecure ca.key
+    openssl rsa -in <ca_name>.key -out <ca_name>.key.insecure
+    sudo mv <ca_name>.key.insecure <ca_name>.key
 ```
 
 Next, create the self-signed root certificate:
 
 ```
-    sudo openssl req -new -x509 -days 3650 -key ca.key -out ca.cert -config openssl.cnf
+    sudo openssl req -new -x509 -days 3650 -key <ca_name>.key -out <ca_name>.cert -config openssl.cnf
 ```
 
 Add the root certificate and key to the destined folders:
 
 ```
-    sudo mv ca.key PSC/CA/private/
-    sudo mv ca.cert PSC/CA/certs/
+    sudo mv <ca_name>.key PSC/CA/private/
+    sudo mv <ca_name>.cert PSC/CA/certs/
 ```
 
 Next create a user key and a certificate signing request in one step: (Use a random passphrase)
