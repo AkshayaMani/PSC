@@ -28,6 +28,7 @@ import (
     "PSC/par"
     "PSC/TS/tsmsg"
     "strconv"
+    "strings"
     "sync"
     "syscall"
     "time"
@@ -1415,9 +1416,16 @@ func sendDataToDest(data []byte, dst_hname string, dst_addr string) {
     checkError(err)
 
     //Add CA certificate to pool
-    caCert, _ := ioutil.ReadFile("../CA/certs/ca.cert")
+    files, _ := ioutil.ReadDir("../CA/certs/")
     caCertPool := x509.NewCertPool()
-    caCertPool.AppendCertsFromPEM(caCert)
+    for _, file := range files {
+
+        if !file.IsDir() && strings.HasSuffix(file.Name(), ".cert") {
+
+            caCert, _ := ioutil.ReadFile("../CA/certs/"+file.Name())
+            caCertPool.AppendCertsFromPEM(caCert)
+        }
+    }
 
     //Dial TCP Connection
     config := tls.Config{Certificates: []tls.Certificate{cert}, RootCAs: caCertPool, ServerName: dst_hname,} //InsecureSkipVerify: true,}
@@ -1470,9 +1478,16 @@ func acceptConnections() {
         checkError(err1)
 
         //Add CA certificate to pool
-        caCert, _ := ioutil.ReadFile("../CA/certs/ca.cert")
+        files, _ := ioutil.ReadDir("../CA/certs/")
         caCertPool := x509.NewCertPool()
-        caCertPool.AppendCertsFromPEM(caCert)
+        for _, file := range files {
+
+            if !file.IsDir() && strings.HasSuffix(file.Name(), ".cert") {
+
+                caCert, _ := ioutil.ReadFile("../CA/certs/"+file.Name())
+                caCertPool.AppendCertsFromPEM(caCert)
+            }
+        }
 
         //Create TLS Listener and Accept Connection
         config := tls.Config{Certificates: []tls.Certificate{cert}, ClientCAs: caCertPool, ClientAuth: tls.RequireAndVerifyClientCert,}
