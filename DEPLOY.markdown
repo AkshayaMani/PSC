@@ -14,7 +14,7 @@ Verify CA certificates through a trust chain. Add all CA certificates to PSC/CA/
 
 ## Generate Public key pair (TS, CP, DP)
 
-You can use PSC/keypair.sh to generate public key pairs for any CP(s), DP(s), or TS in the network. 
+You can use PSC/keypair.sh to generate public key pairs for any CP(s), DP(s), or TS in the network. (Remember to modify default certificate folder in openssl.cnf)
 
 ```
     ./keypair.sh <usr> <common_name>
