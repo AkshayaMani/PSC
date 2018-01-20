@@ -13,7 +13,6 @@ import (
     "crypto/x509"
     "encoding/binary"
     "flag"
-    "fmt"
     "gopkg.in/dedis/crypto.v0/abstract"
     "gopkg.in/dedis/crypto.v0/nist"
     "github.com/golang/protobuf/proto"
@@ -26,6 +25,7 @@ import (
     "os"
     "PSC/DP/dpres"
     "PSC/goControlTor"
+    "PSC/logging"
     "PSC/match"
     "PSC/TS/tsmsg"
     "strings"
@@ -73,9 +73,15 @@ var q_to_e = map[string]string{ //Map query
 
 func main() {
 
+    logging.LogToFile("logs/Connection"+time.Now().Local().Format("2006-01-02")+"_"+time.Now().Local().Format("15:04:05"))
+
     dp_ip, control_addr, control_port, passwd_file := parseCommandline(os.Args) //Parse DP common name & IP, Tor control address & port no., and hashed password file path
 
+    logging.Info.Println("Parsed command-line arguments")
+
     torControlPortConnect(control_addr, control_port, passwd_file)
+
+    logging.Info.Println("Connected to Tor control port")
 
     for{
         //Initialize global variables
@@ -84,7 +90,10 @@ func main() {
         //Listen to the TCP port
         ln, _ = net.Listen("tcp", dp_ip+":7100")
 
-        fmt.Println("Started Data Party")
+        logging.LogToFile("logs/"+dp_cname+time.Now().Local().Format("2006-01-02")+"_"+time.Now().Local().Format("15:04:05"))
+        logging.Info.Println("PSC is a free, open-source software, available for download at <url>")
+        logging.Info.Println("PSC uses https://github.com/postfix/goControlTor library to connect to Tor control port")
+        logging.Info.Println("Started Data Party")
 
         wg.Add(1) //Increment WaitGroup counter
 
@@ -117,8 +126,7 @@ func main() {
 
                 case msg := <- message:
 
-                    event, _, err1 := torControl.CommandParse(msg) //Print command
-                    checkError(err1)
+                    event, _, _ := torControl.CommandParse(msg) //Print command
 
                     if len(event) != 0 {
 
@@ -137,12 +145,13 @@ func main() {
                     if step_no == 4 { //Finish
 
                         //Finishing measurement
-                        fmt.Println("Finished measurement.")
+                        logging.Info.Println("Finished measurement")
 
                     } else {
 
                         //Quit and Re-start measurement
-                        fmt.Println("Quitting... \n Re-starting measurement...")
+                        logging.Info.Println("Quit")
+                        logging.Info.Println("Re-start measurement")
                     }
 
                     break loop
@@ -200,14 +209,14 @@ func handleTS(conn net.Conn, com_name string) {
                     domain_map = match.ExactMatchCreateMap(domain_list)
                 }
 
-                fmt.Println("Sending TS signal. Step No.", step_no)
+                logging.Info.Println("Sending TS signal. Step No.", step_no)
                 sendTSSignal(ts_s_no+step_no) //Send signal to TS
 
                 step_no = 1 //TS step no.
 
             } else { //Data not received from TS
 
-                fmt.Println("Error: Data not sent by Tally Server")
+                logging.Warning.Println("Data sent by", com_name, "ignored")
 
                 f_flag = true //Set finish flag
 
@@ -225,7 +234,7 @@ func handleTS(conn net.Conn, com_name string) {
 
                 if *sig.Fflag == true { //If finish flag set
 
-                    fmt.Println("TS sent finish")
+                    logging.Info.Println("TS sent finish")
                     shutdownDP() //Shutdown DP gracefully
 
                 } else { //Finish flag not set
@@ -256,11 +265,10 @@ func handleTS(conn net.Conn, com_name string) {
                                 }
 
                                 //Convert to bytes
-                                resp1, err := proto.Marshal(resp)
-                                checkError(err)
+                                resp1, _ := proto.Marshal(resp)
 
                                 //Send key to CP
-                                fmt.Println("Sending symmetric key to CP", i,". Step No.", step_no)
+                                logging.Info.Println("Sending symmetric key to CP", i,". Step No.", step_no)
                                 sendDataToDest(resp1, cp_hname[i], cp_ips[i]+":6100")
 	                    }
 
@@ -268,7 +276,7 @@ func handleTS(conn net.Conn, com_name string) {
 
                         } else if step_no == 2 { //If step no. 2
 
-                            fmt.Println("Started data collection")
+                            logging.Info.Println("Started data collection")
 
                             collectData() //Start collecting data
 
@@ -303,23 +311,22 @@ func handleTS(conn net.Conn, com_name string) {
                                 }
 
                                 //Convert to bytes
-                                resp1, err := proto.Marshal(resp)
-                                checkError(err)
+                                resp1, _ := proto.Marshal(resp)
 
                                 //Send data shares to CP
-                                fmt.Println("Sending masked data shares to CP", i,". Step No.", step_no)
+                                logging.Info.Println("Sending masked data shares to CP", i,". Step No.", step_no)
                                 sendDataToDest(resp1, cp_hname[i], cp_ips[i]+":6100")
                             }
                         }
 
                         sendTSSignal(ts_s_no+step_no) //Send signal to TS
-                        fmt.Println("Sent TS signal ", step_no)
+                        logging.Info.Println("Sent TS signal ", step_no)
 
                         step_no += 1 //Increment step no.
 
                     } else { //Wrong signal from TS
 
-                        fmt.Println("Err: Wrong signal from TS")
+                        logging.Error.Println("Wrong signal from TS")
 
                         f_flag = true //Set finish flag
 
@@ -364,7 +371,8 @@ func collectData () {
     err := torControl.StartCollection(q_to_e[query])
     checkError(err)
     time.Sleep(24 * time.Duration(epoch) * time.Hour)
-    torControl.StopCollection()
+    err = torControl.StopCollection()
+    checkError(err)
 }
 
 //Input: Tor control port connection
@@ -483,19 +491,19 @@ func parseCommandline(arg []string) (string, string, string, string) {
 
     if dp_cname == "" || dp_ip == "" {
 
-        fmt.Println("Argument required:")
+        logging.Error.Println("Argument required:")
         e_flag = true //Set exit flag
 
         if dp_cname == "" {
 
-            fmt.Println("   -d string")
-            fmt.Println("      DP common name (Required)")
+            logging.Error.Println("   -d string")
+            logging.Error.Println("      DP common name (Required)")
         }
 
         if dp_ip == "" {
 
-            fmt.Println("   -i string")
-            fmt.Println("      DP IP (Required)")
+            logging.Error.Println("   -i string")
+            logging.Error.Println("      DP IP (Required)")
         }
     }
 
@@ -599,8 +607,7 @@ func parseCommonName(conn net.Conn) string {
 //Function: Read Exactly n Bytes from the Socket
 func socketReadN(conn net.Conn, n uint32) []byte {
     buf := make([]byte, n)
-    _, err := io.ReadFull(conn,buf) //Read n Bytes
-    checkError(err)
+    io.ReadFull(conn,buf) //Read n Bytes
     return buf
 }
 
@@ -723,8 +730,10 @@ func contains(pl []string, p string) bool {
 //Input: Error
 //Function: Check Error
 func checkError(err error) {
+
     if err != nil {
-        fmt.Fprintf(os.Stderr, "Fatal error: %s", err.Error())
+
+        logging.Error.Println(err.Error())
         os.Exit(1)
     }
 }

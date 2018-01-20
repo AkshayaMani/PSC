@@ -15,7 +15,6 @@ import (
     "encoding/binary"
     "errors"
     "flag"
-    "fmt"
     "gopkg.in/dedis/crypto.v0/abstract"
     "gopkg.in/dedis/crypto.v0/hash"
     "gopkg.in/dedis/crypto.v0/nist"
@@ -33,6 +32,7 @@ import (
     "PSC/DP/dpres"
     "PSC/CP/schnorr/schnorrkey"
     "PSC/CP/cpres"
+    "PSC/logging"
     "PSC/par"
     "PSC/TS/tsmsg"
     "strconv"
@@ -100,7 +100,11 @@ var start time.Time
 
 func main() {
 
+    logging.LogToFile("logs/Connection"+time.Now().Local().Format("2006-01-02")+"_"+time.Now().Local().Format("15:04:05"))
+
     cp_ip := parseCommandline(os.Args) //Parse CP common name
+
+    logging.Info.Println("Parsed command-line arguments")
 
     for{
 
@@ -110,7 +114,9 @@ func main() {
         //Listen to the TCP port
         ln, _ = net.Listen("tcp", cp_ip+":6100")
 
-        fmt.Println("Started Computation Party ")
+        logging.LogToFile("logs/"+cp_cname+time.Now().Local().Format("2006-01-02")+"_"+time.Now().Local().Format("15:04:05"))
+        logging.Info.Println("PSC is a free, open-source software, available for download at <url>")
+        logging.Info.Println("PSC uses https://github.com/postfix/goControlTor library to connect to Tor control port")
 
         //Channel to handle simultaneous DP connections
         dpconn := make(chan net.Conn)
@@ -171,7 +177,7 @@ func main() {
 
                             assignConfig(config) //Assign configuration
 
-                            fmt.Println("Sending TS signal. Bcast CP", cp_bcast, "Step No.", step_no)
+                            logging.Info.Println("Sending TS signal. Bcast CP", cp_bcast, "Step No.", step_no)
                             sendTSSignal(ts_s_no+step_no) //Send signal to TS
 
                             step_no = 1 //TS step no.
@@ -183,7 +189,7 @@ func main() {
 
                             if *sig.Fflag == true { //If finish flag set
 
-                                fmt.Println("Shutting down ", cp_cname)
+                                logging.Info.Println("Shutting down ", cp_cname)
                                 shutdownCP() //Shutdown CP gracefully
 
                             } else { //Finish flag not set
@@ -196,7 +202,7 @@ func main() {
 
                                 } else { //Wrong signal from TS
 
-                                    fmt.Println("Err: Wrong signal from TS")
+                                    logging.Error.Println("Wrong signal from TS")
 
                                     f_flag = true //Set finish flag
 
@@ -219,14 +225,15 @@ func main() {
                     if step_no == 11 { //Finish
 
                         //Finishing measurement
-                        fmt.Println("Finished measurement.")
+                        logging.Info.Println("Finished measurement")
 
-                        fmt.Println(time.Since(start))
+                        logging.Info.Println("Total measurement time", time.Since(start))
 
                     } else {
 
                         //Quit and Re-start measurement
-                        fmt.Println("Quitting... \n Re-starting measurement...")
+                        logging.Info.Println("Quit")
+                        logging.Info.Println("Re-start measurement")
                     }
 
                     break loop
@@ -297,7 +304,7 @@ func handleDPs(dpconn chan net.Conn) {
 
         } else { //DP session no. not verified
 
-            fmt.Println("Error: DP session no. not verified")
+            logging.Error.Println("DP session no. not verified")
 
             f_flag = true //Set finish flag
 
@@ -321,7 +328,7 @@ func handleDPs(dpconn chan net.Conn) {
                 }
             }
 
-            fmt.Println("Sending TS signal. Bcast CP", cp_bcast, "Step No.", step_no)
+            logging.Info.Println("Sending TS signal. Bcast CP", cp_bcast, "Step No.", step_no)
             sendTSSignal(ts_s_no+step_no) //Send signal to TS
 
             step_no += 1 //Increment step no.
@@ -362,7 +369,7 @@ func handleCPs(cpconn chan net.Conn, com_name string) {
 
                 cp_s_no = binary.BigEndian.Uint32(cp_resp.R[0]) //Set Session No.
 
-                fmt.Println("Sending TS signal. Bcast CP", cp_bcast, "Step No.", step_no)
+                logging.Info.Println("Sending TS signal. Bcast CP", cp_bcast, "Step No.", step_no)
                 sendTSSignal(ts_s_no+step_no) //Send signal to TS
 
                 cp_bcast = 0 //Set CP0 as Broadcasting CP
@@ -384,7 +391,7 @@ func handleCPs(cpconn chan net.Conn, com_name string) {
                 //If Error in Verifying
                 if err != nil {
 
-                    fmt.Println("Err: CP Schnorr public key proof not verified \n", err)
+                    logging.Error.Println("CP Schnorr public key proof not verified \n", err)
 
                     f_flag = true //Set finish flag
 
@@ -402,14 +409,12 @@ func handleCPs(cpconn chan net.Conn, com_name string) {
                 copy(schnorrpub.Y[:], tb.Bytes())
 
                 //Write to file
-                out, err := proto.Marshal(schnorrpub)
-                checkError(err)
-                err = ioutil.WriteFile("schnorr/public/" + com_name + ".pub", out, 0644)
-                checkError(err)
+                out, _ := proto.Marshal(schnorrpub)
+                ioutil.WriteFile("schnorr/public/" + com_name + ".pub", out, 0644)
 
                 no_cp_res += 1 //Increment no. of CP public keys received
 
-                fmt.Println("Sending TS signal. Bcast CP", cp_bcast, "Step No.", step_no)
+                logging.Info.Println("Sending TS signal. Bcast CP", cp_bcast, "Step No.", step_no)
                 sendTSSignal(ts_s_no+step_no) //Send signal to TS
 
                 //If All CP public keys received
@@ -452,7 +457,7 @@ func handleCPs(cpconn chan net.Conn, com_name string) {
                         //Compare Signatures
                         if bytes.Compare(buf[9:9+l], b_j[no_cp_res - 1]) != 0 { //If re-broadcast data doesn't match
 
-                            fmt.Print("Err: Re-broadcast data does not match")
+                            logging.Error.Println("Re-broadcast data does not match")
 
                             f_flag = true //Set finish flag
 
@@ -467,7 +472,7 @@ func handleCPs(cpconn chan net.Conn, com_name string) {
                     cp_res_byte = make([]byte, len(buf[9+l:]))
                     copy(cp_res_byte[:], buf[9+l:])
 
-                    fmt.Println("     Rebroadcasting msg sent by CP", int(cp_bcast))
+                    logging.Info.Println("Rebroadcasting msg sent by CP", int(cp_bcast))
                     sendDataN_1(cp_s_no+step_no-2, int(cp_bcast), b_j[no_cp_res]) //Re-Broadcasting
 
                 } else if uint8(buf[0]) == 0 { //If Broadcast Flag not Set
@@ -477,7 +482,7 @@ func handleCPs(cpconn chan net.Conn, com_name string) {
                         //Compare Signatures
                         if bytes.Compare(buf[9+l:], b_j[no_cp_res - 1]) != 0 { //If re-broadcast data doesn't match
 
-                            fmt.Print("Err: Re-broadcast data does not match")
+                            logging.Error.Println("Re-broadcast data does not match")
 
                             f_flag = true //Set finish flag
 
@@ -494,7 +499,7 @@ func handleCPs(cpconn chan net.Conn, com_name string) {
 
             } else if f != true { //If CP Schnorr signature not verified
 
-                fmt.Print("Err: CP Schnorr signature not verified")
+                logging.Error.Println("CP Schnorr signature not verified")
 
                 f_flag = true //Set finish flag
 
@@ -525,7 +530,7 @@ func handleCPs(cpconn chan net.Conn, com_name string) {
                     //If Error in Verifying
                     if err != nil {
 
-		        fmt.Println("Err: CP ElGamal public key proof not verified \n", err)
+                        logging.Error.Println("CP ElGamal public key proof not verified \n", err)
 
                         f_flag = true //Set finish flag
 
@@ -565,7 +570,7 @@ func handleCPs(cpconn chan net.Conn, com_name string) {
                         //If Error in Verifying
                         if err != nil {
 
-                            fmt.Println("Err: Noise generation proof", i, "not verified \n", err)
+                            logging.Error.Println("Noise generation proof", i, "not verified \n", err)
 
                             f_flag = true //Set finish flag
 
@@ -616,7 +621,7 @@ func handleCPs(cpconn chan net.Conn, com_name string) {
                         //If Error in Verifying
                         if err != nil {
 
-                            fmt.Println("Err: ElGamal ciphertext computation proof", i, "not verified \n", err)
+                            logging.Error.Println("ElGamal ciphertext computation proof", i, "not verified \n", err)
 
                             f_flag = true //Set finish flag
 
@@ -652,7 +657,7 @@ func handleCPs(cpconn chan net.Conn, com_name string) {
        	            //If Error in Verifying
                     if err != nil {
 
-                        fmt.Println("Err: Verifiable shuffle proof not verified \n", err)
+                        logging.Error.Println("Verifiable shuffle proof not verified \n", err)
 
                         f_flag = true //Set finish flag
 
@@ -692,7 +697,7 @@ func handleCPs(cpconn chan net.Conn, com_name string) {
        	               	//If Error in Verifying
                         if err != nil {
 
-                            fmt.Println("Err: Re-randomization re-encryption proof", i, "not verified \n", err)
+                            logging.Error.Println("Re-randomization re-encryption proof", i, "not verified \n", err)
 
                             f_flag = true //Set finish flag
 
@@ -704,7 +709,7 @@ func handleCPs(cpconn chan net.Conn, com_name string) {
                         //If Re-randomization re-encryption output is generator
                         if R_O[i].Equal(suite.Point().Base()) == true || C_O[i].Equal(suite.Point().Base()) == true {
 
-                            fmt.Println("Err: Re-randomization re-encryption output is generator")
+                            logging.Error.Println("Re-randomization re-encryption output is generator")
 
                             f_flag = true //Set finish flag
 
@@ -745,7 +750,7 @@ func handleCPs(cpconn chan net.Conn, com_name string) {
                         //If Error in Verifying
                         if err != nil {
 
-                            fmt.Println("Err: Decryption proof", i, "not verified \n", err)
+                            logging.Error.Println("Decryption proof", i, "not verified \n", err)
 
                             f_flag = true //Set finish flag
 
@@ -768,7 +773,7 @@ func handleCPs(cpconn chan net.Conn, com_name string) {
 
                     if step_no != 10 {
 
-                        fmt.Println("Sending TS signal. Bcast CP", cp_bcast, "Step No.", step_no)
+                        logging.Info.Println("Sending TS signal. Bcast CP", cp_bcast, "Step No.", step_no)
                         sendTSSignal(ts_s_no+step_no) //Send signal to TS
 
                     } else {
@@ -789,7 +794,7 @@ func handleCPs(cpconn chan net.Conn, com_name string) {
 
                         agg -= int64(n/2)
 
-                        fmt.Printf("Aggregate = %d \n", agg)
+                        logging.Info.Println("Aggregate =", agg)
 
                         //Assign aggregated result
                         result := new(TSmsg.Result)
@@ -808,7 +813,7 @@ func handleCPs(cpconn chan net.Conn, com_name string) {
 
                 } else {
 
-                    fmt.Println("Sending TS signal. Bcast CP", cp_bcast, "Step No.", step_no)
+                    logging.Info.Println("Sending TS signal. Bcast CP", cp_bcast, "Step No.", step_no)
                     sendTSSignal(ts_s_no+step_no) //Send signal to TS
 
                     cp_bcast += 1 //Set Broadcasting CP as next CP
@@ -880,16 +885,12 @@ func broadcastCPData() {
             copy(pub_bytes.Y[:], tb.Bytes())
 
             //Write Schnorr private key to file
-            out, err := proto.Marshal(priv_bytes)
-            checkError(err)
-            err = ioutil.WriteFile("schnorr/private/" + cp_cname + ".priv", out, 0644)
-            checkError(err)
+            out, _ := proto.Marshal(priv_bytes)
+            ioutil.WriteFile("schnorr/private/" + cp_cname + ".priv", out, 0644)
 
             //Write Schnorr public key to file
-            out, err = proto.Marshal(pub_bytes)
-            checkError(err)
-            err = ioutil.WriteFile("schnorr/public/" + cp_cname + ".pub", out, 0644)
-            checkError(err)
+            out, _ = proto.Marshal(pub_bytes)
+            ioutil.WriteFile("schnorr/public/" + cp_cname + ".pub", out, 0644)
 
             //Set CP response to Schnorr public key
             resp.R = make([][]byte, 1)
@@ -1188,7 +1189,7 @@ func broadcastCPData() {
         //If Step No. 2
         if step_no == 2 {
 
-            fmt.Println("Sending TS signal. Bcast CP", cp_bcast, "Step No.", step_no)
+            logging.Info.Println("Sending TS signal. Bcast CP", cp_bcast, "Step No.", step_no)
             sendTSSignal(ts_s_no+step_no) //Send signal to TS
 
             cp_bcast = 0 //Set CP0 as Broadcasting CP
@@ -1202,7 +1203,7 @@ func broadcastCPData() {
 
                 if step_no != 10 {
 
-                    fmt.Println("Sending TS signal. Bcast CP", cp_bcast, "Step No.", step_no)
+                    logging.Info.Println("Sending TS signal. Bcast CP", cp_bcast, "Step No.", step_no)
                     sendTSSignal(ts_s_no+step_no) //Send signal to TS
 
                 } else {
@@ -1223,7 +1224,7 @@ func broadcastCPData() {
 
                     agg -= int64(n/2)
 
-                    fmt.Printf("Aggregate = %d \n", agg)
+                    logging.Info.Println("Aggregate =", agg)
 
                     //Assign aggregated result
                     result := new(TSmsg.Result)
@@ -1242,7 +1243,7 @@ func broadcastCPData() {
 
             } else {
 
-                fmt.Println("Sending TS signal. Bcast CP", cp_bcast, "Step No.", step_no)
+                logging.Info.Println("Sending TS signal. Bcast CP", cp_bcast, "Step No.", step_no)
                 sendTSSignal(ts_s_no+step_no) //Send signal to TS
 
                 cp_bcast += 1 //Set Broadcasting CP as next CP
@@ -1264,19 +1265,19 @@ func parseCommandline(arg []string) (string){
 
     if cp_cname == "" || cp_ip == "" {
 
-        fmt.Println("Argument required:")
+        logging.Error.Println("Argument required:")
         e_flag = true //Set exit flag
 
         if cp_cname == "" {
 
-            fmt.Println("   -c string")
-            fmt.Println("      CP common name (Required)")
+            logging.Error.Println("   -c string")
+            logging.Error.Println("      CP common name (Required)")
         }
 
         if cp_ip == "" {
 
-            fmt.Println("   -i string")
-            fmt.Println("      CP IP (Required)")
+            logging.Error.Println("   -i string")
+            logging.Error.Println("	 CP IP (Required)")
         }
     }
 
@@ -1457,8 +1458,7 @@ func sendDataToDest(data []byte, dst_hname string, dst_addr string) {
 //Function: Read Exactly n Bytes from the Socket
 func socketReadN(conn net.Conn, n uint32) []byte {
     buf := make([]byte, n)
-    _, err := io.ReadFull(conn,buf) //Read n Bytes
-    checkError(err)
+    io.ReadFull(conn,buf) //Read n Bytes
     return buf
 }
 
@@ -1524,11 +1524,9 @@ func acceptConnections() {
 func broadcastData(step_no uint32, data []byte) {
 
     //Read Private Key from file
-    in, err := ioutil.ReadFile("schnorr/private/" + cp_cname + ".priv")
-    checkError(err)
+    in, _ := ioutil.ReadFile("schnorr/private/" + cp_cname + ".priv")
     priv := &Schnorrkey.Priv{}
-    err = proto.Unmarshal(in, priv)
-    checkError(err)
+    proto.Unmarshal(in, priv)
 
     //Convert Bytes to Private Key
     x := suite.Scalar().SetBytes(priv.X)
@@ -1803,7 +1801,7 @@ func checkError(err error) {
 
     if err != nil {
 
-        fmt.Fprintf(os.Stderr, "Fatal error: %s", err.Error())
+        logging.Error.Println(err.Error())
 	os.Exit(1)
     }
 }

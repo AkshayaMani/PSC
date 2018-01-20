@@ -20,6 +20,7 @@ import (
     "math/rand"
     "net"
     "os"
+    "PSC/logging"
     "PSC/TS/tsmsg"
     "strings"
     "sync"
@@ -59,9 +60,15 @@ var wg = &sync.WaitGroup{} //WaitGroup to wait for all goroutines to shutdown
 
 func main() {
 
+    logging.LogToFile("logs/Connection"+time.Now().Local().Format("2006-01-02")+"_"+time.Now().Local().Format("15:04:05"))
+
     ts_ip, config_file := parseCommandline(os.Args) //Parse TS common name, TS IP, configuration file path
 
+    logging.Info.Println("Parsed command-line arguments")
+
     assignConfig(config_file) //Assign configuration parameters
+
+    logging.Info.Println("Assigned configuration parameters")
 
     expt_no := 0 //Set measurement no. to 0
 
@@ -73,11 +80,23 @@ func main() {
         //Listen to the TCP port
         ln, _ = net.Listen("tcp", ts_ip+":5100")
 
-        fmt.Println("Started Tally Server")
+        logging.LogToFile("logs/"+ts_cname+time.Now().Local().Format("2006-01-02")+"_"+time.Now().Local().Format("15:04:05"))
+        logging.Info.Println("PSC is a free, open-source software, available for download at <url>")
+        logging.Info.Println("PSC uses https://github.com/postfix/goControlTor library to connect to Tor control port")
+        logging.Info.Println("Sleeping...")
+
+        if expt_no != 0 {
+
+            time.Sleep(24 * time.Duration(epoch) * time.Hour) //Sleep for 10 minutes before starting
+        }
+
+        logging.Info.Println("Started Tally Server")
 
         expt_no = expt_no + 1 //Increment measurement no.
 
         if expt_no <= no_Expts { //Continue measurements
+
+            logging.Info.Println("Begin measurement no.", expt_no)
 
             seed := rand.NewSource(time.Now().UnixNano())
             rnd := rand.New(seed)
@@ -166,7 +185,7 @@ func main() {
                     case <-finish:
 
                         //Send finish signal to all CPs
-                        fmt.Println("Sending finish signal to CPs")
+                        logging.Info.Println("Sending finish signal to CPs")
                         for i := 0; i < no_CPs; i++ {
 
                             signalParty(cp_hname[i], cp_ips[i], true, cp_step_no)
@@ -175,7 +194,7 @@ func main() {
                         if dp_step_no != ts_s_no + 4 { //If DPs have not finished
 
                             //Send finish signal to all DPs
-                            fmt.Println("Sending finish signal to DPs")
+                            logging.Info.Println("Sending finish signal to DPs")
                             for i := 0; i < no_DPs; i++ {
 
                                 signalParty(dp_hname[i], dp_ips[i], true, dp_step_no)
@@ -187,12 +206,13 @@ func main() {
                         if cp_step_no == ts_s_no + 11 { //Finish
 
                             //Finishing measurement
-                            fmt.Println("Finished measurement no. ", expt_no)
+                            logging.Info.Println("Finished measurement no.", expt_no)
 
                         } else {
 
                             //Quit and Re-start measurement
-                            fmt.Println("Quitting... \n Re-starting measurement...")
+                            logging.Info.Println("Quit")
+                            logging.Info.Println("Re-start measurement")
 
                             expt_no = expt_no - 1 //Decrement measurement no.
 
@@ -216,20 +236,32 @@ func main() {
                 fmt.Println("Enter no. of experiments")
                 fmt.Scanf("%d", &no_Expts)
 
+                logging.Info.Println("Continue running", no_Expts, "measurments")
+
                 expt_no = 0 //Reset measurement no.
 
-            } else {
+            } else if exit == "Y" || exit == "y" {
 
                 shutdownTS() //Shutdown TS gracefully
 
                 wg.Wait()
+
+                logging.Info.Println("Quit")
+
+                break //End Measurement
+
+            } else {
+
+                logging.Info.Println("Invalid option")
+                logging.Info.Println("Quit")
 
                 break //End Measurement
             }
         }
     }
 
-    fmt.Println("Finished measurements. Exiting.")
+    logging.Info.Println("Finished measurements")
+    logging.Info.Println("Exit")
 }
 
 //Input: Party (CP/DP) hostname, Party (CP/DP) IP, Finish flag, Session no.
@@ -298,7 +330,7 @@ func handleClients(clientconn chan net.Conn, com_name string) {
 
                 } else { //Wrong acknowledgement
 
-                    fmt.Println("Error: Wrong acknowledgement by DP ", com_name)
+                    logging.Error.Println("Wrong acknowledgement by DP ", com_name)
 
                     shutdownTS() //Shutdown TS gracefully
 
@@ -307,7 +339,7 @@ func handleClients(clientconn chan net.Conn, com_name string) {
 
             } else if *sig.Fflag == true {//Error
 
-                fmt.Println("Error: DP ", com_name, "sent quit")
+                logging.Error.Println("DP ", com_name, "sent quit")
 
                 shutdownTS() //Shutdown TS gracefully
 
@@ -324,7 +356,7 @@ func handleClients(clientconn chan net.Conn, com_name string) {
                         dp_step_no += 1 //Increment DP step no.
 
                         //Send signal to DPs to share Symmetric keys with the CPs
-                        fmt.Println("Signal DPs to send symmetric key shares. Step No.", dp_step_no-ts_s_no)
+                        logging.Info.Println("Signal DPs to send symmetric key shares. Step No.", dp_step_no-ts_s_no)
                         for i := 0; i < no_DPs; i++ {
 
                             signalParty(dp_hname[i], dp_ips[i], false, dp_step_no)
@@ -338,7 +370,7 @@ func handleClients(clientconn chan net.Conn, com_name string) {
                     dp_step_no += 1 //Increment DP step no.
 
                     //Send signal to DPs to start data collection
-                    fmt.Println("Signal DPs to collect data. Step No.", dp_step_no-ts_s_no)
+                    logging.Info.Println("Signal DPs to collect data. Step No.", dp_step_no-ts_s_no)
                     for i := 0; i < no_DPs; i++ {
 
                         signalParty(dp_hname[i], dp_ips[i], false, dp_step_no)
@@ -357,7 +389,7 @@ func handleClients(clientconn chan net.Conn, com_name string) {
                             dp_step_no += 1 //Increment DP step no.
 
                             //Signal DPs to send data to CPs
-                            fmt.Println("Signal DPs to send masked data shares. Step No.", dp_step_no-ts_s_no)
+                            logging.Info.Println("Signal DPs to send masked data shares. Step No.", dp_step_no-ts_s_no)
                             for i := 0; i < no_DPs; i++ {
 
                                 signalParty(dp_hname[i], dp_ips[i], false, dp_step_no)
@@ -368,7 +400,7 @@ func handleClients(clientconn chan net.Conn, com_name string) {
 
                     } else if end < 24.0 * float64(epoch) { //Data not collected for an epoch - error
 
-                        fmt.Println("Error: Data not collected for an epoch")
+                        logging.Error.Println("Data not collected for an epoch")
 
                         shutdownTS() //Shutdown TS gracefully
 
@@ -380,7 +412,7 @@ func handleClients(clientconn chan net.Conn, com_name string) {
                     dp_step_no += 1 //Increment DP step no.
 
                     //Send finish signal to DPs
-                    fmt.Println("Signal DPs to finish. Step No.", dp_step_no-ts_s_no)
+                    logging.Info.Println("Signal DPs to finish. Step No.", dp_step_no-ts_s_no)
                     for i := 0; i < no_DPs; i++ {
 
                         signalParty(dp_hname[i], dp_ips[i], true, dp_step_no)
@@ -402,7 +434,7 @@ func handleClients(clientconn chan net.Conn, com_name string) {
 
                     if agg != *result.Agg { //Wrong aggregate
 
-                        fmt.Println("Error: Wrong aggregate value by CP ", com_name)
+                        logging.Error.Println("Wrong aggregate value by CP ", com_name)
 
                         shutdownTS() //Shutdown TS gracefully
 
@@ -432,7 +464,7 @@ func handleClients(clientconn chan net.Conn, com_name string) {
 
                     } else { //Wrong acknowledgement
 
-                        fmt.Println("Error: Wrong acknowledgement by CP ", com_name)
+                        logging.Error.Println("Wrong acknowledgement by CP ", com_name)
 
                         shutdownTS() //Shutdown TS gracefully
 
@@ -441,7 +473,7 @@ func handleClients(clientconn chan net.Conn, com_name string) {
 
                 } else if *sig.Fflag == true {//Error
 
-                    fmt.Println("Error: CP ", com_name, "sent quit ")
+                    logging.Info.Println("CP ", com_name, "sent quit ")
 
                     shutdownTS() //Shutdown TS gracefully
 
@@ -463,7 +495,7 @@ func handleClients(clientconn chan net.Conn, com_name string) {
                         dp_step_no += 1 //Increment DP step no.
 
                         //Send signal to DPs to share Symmetric keys with the CPs
-                        fmt.Println("Signal DPs to send symmetric key shares. Step No.", dp_step_no-ts_s_no)
+                        logging.Info.Println("Signal DPs to send symmetric key shares. Step No.", dp_step_no-ts_s_no)
                         for i := 0; i < no_DPs; i++ {
 
                             signalParty(dp_hname[i], dp_ips[i], false, dp_step_no)
@@ -479,7 +511,7 @@ func handleClients(clientconn chan net.Conn, com_name string) {
                     cp_bcast = 0 //Set broadcasting CP to 1st CP
 
                     //Send signal to 1st CP to broadcast
-                    fmt.Println("Sending signal to", cp_hname[cp_bcast], "Step No.", cp_step_no-ts_s_no)
+                    logging.Info.Println("Sending signal to", cp_hname[cp_bcast], "Step No.", cp_step_no-ts_s_no)
                     signalParty(cp_hname[cp_bcast], cp_ips[cp_bcast], false, cp_step_no)
 
                 } else if cp_step_no == ts_s_no + 3 || cp_step_no == ts_s_no + 4 || cp_step_no == ts_s_no + 7 || cp_step_no == ts_s_no + 8 || cp_step_no == ts_s_no + 9 { //Step No. 2, 3, 4, 7, 8, or 9 (Regular sequential CP broadcast)
@@ -496,7 +528,7 @@ func handleClients(clientconn chan net.Conn, com_name string) {
                     }
 
                     //Send signal to next CP to broadcast
-                    fmt.Println("Sending signal to", cp_hname[cp_bcast], "Step No.", cp_step_no-ts_s_no)
+                    logging.Info.Println("Sending signal to", cp_hname[cp_bcast], "Step No.", cp_step_no-ts_s_no)
                     signalParty(cp_hname[cp_bcast], cp_ips[cp_bcast], false, cp_step_no)
 
                 } else if cp_step_no == ts_s_no + 5 {  //Step No. 5
@@ -512,7 +544,7 @@ func handleClients(clientconn chan net.Conn, com_name string) {
                             dp_step_no += 1 //Increment DP step no.
 
                             //Signal DPs to send data to CPs
-                            fmt.Println("Signal DPs to send masked data shares. Step No.", dp_step_no-ts_s_no)
+                            logging.Info.Println("Signal DPs to send masked data shares. Step No.", dp_step_no-ts_s_no)
                             for i := 0; i < no_DPs; i++ {
 
                                 signalParty(dp_hname[i], dp_ips[i], false, dp_step_no)
@@ -526,7 +558,7 @@ func handleClients(clientconn chan net.Conn, com_name string) {
                         cp_bcast += 1 //Set broadcasting CP as next CP
 
                         //Send signal to next CP to broadcast
-                        fmt.Println("Sending signal to", cp_hname[cp_bcast], "Step No.", cp_step_no-ts_s_no)
+                        logging.Info.Println("Sending signal to", cp_hname[cp_bcast], "Step No.", cp_step_no-ts_s_no)
                         signalParty(cp_hname[cp_bcast], cp_ips[cp_bcast], false, cp_step_no)
                     }
 
@@ -538,10 +570,8 @@ func handleClients(clientconn chan net.Conn, com_name string) {
                         result.Agg = proto.String(agg)
 
                         //Write to config file
-                        out, err := proto.Marshal(result)
-                        checkError(err)
-                        err = ioutil.WriteFile("result/"+query+time.Now().Local().Format("2006-01-02")+"_"+query+time.Now().Local().Format("15:04:05"), out, 0644)
-                        checkError(err)
+                        out, _ := proto.Marshal(result)
+                        ioutil.WriteFile("result/"+query+time.Now().Local().Format("2006-01-02")+"_"+query+time.Now().Local().Format("15:04:05"), out, 0644)
 
                         cp_step_no += 1 //Increment CP step no.
 
@@ -552,7 +582,7 @@ func handleClients(clientconn chan net.Conn, com_name string) {
                         cp_bcast += 1 //Set broadcasting CP as next CP
 
                         //Send signal to next CP to broadcast
-                        fmt.Println("Sending signal to", cp_hname[cp_bcast], "Step No.", cp_step_no-ts_s_no)
+                        logging.Info.Println("Sending signal to", cp_hname[cp_bcast], "Step No.", cp_step_no-ts_s_no)
                         signalParty(cp_hname[cp_bcast], cp_ips[cp_bcast], false, cp_step_no)
                     }
                 }
@@ -583,19 +613,19 @@ func parseCommandline(arg []string) (string, string) {
 
     if ts_cname == "" || ts_ip == "" {
 
-        fmt.Println("Argument required:")
+        logging.Error.Println("Argument required:")
         e_flag = true //Set exit flag
 
         if ts_cname == "" {
 
-            fmt.Println("   -c string")
-            fmt.Println("      TS common name (Required)")
+            logging.Error.Println("   -c string")
+            logging.Error.Println("	 TS common name (Required)")
         }
 
         if ts_ip == "" {
 
-            fmt.Println("   -i string")
-            fmt.Println("      TS IP (Required)")
+            logging.Error.Println("   -i string")
+            logging.Error.Println("	 TS IP (Required)")
         }
     }
 
@@ -612,11 +642,9 @@ func parseCommandline(arg []string) (string, string) {
 func assignConfig(config_file string) {
 
     //Read configuration file
-    in, err := ioutil.ReadFile(config_file)
-    checkError(err)
+    in, _ := ioutil.ReadFile(config_file)
     config := &TSmsg.Config{}
-    err = proto.Unmarshal(in, config)
-    checkError(err)
+    proto.Unmarshal(in, config)
 
     //Assign configuration parameters
     no_CPs = int(*config.Ncps) //No.of CPs
@@ -765,8 +793,7 @@ func acceptConnections() {
 //Function: Read Exactly n Bytes from the Socket
 func socketReadN(conn net.Conn, n uint32) []byte {
     buf := make([]byte, n)
-    _, err := io.ReadFull(conn,buf) //Read n Bytes
-    checkError(err)
+    io.ReadFull(conn,buf) //Read n Bytes
     return buf
 }
 
@@ -810,7 +837,8 @@ func contains(pl []string, p string) bool {
 //Function: Check Error
 func checkError(err error) {
     if err != nil {
-        fmt.Fprintf(os.Stderr, "Fatal error: %s", err.Error())
+
+        logging.Error.Println(err.Error())
         os.Exit(1)
     }
 }
