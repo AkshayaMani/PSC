@@ -3,11 +3,11 @@
 The CA needs a few files to operate: one to keep track of the last serial number used by the CA (each certificate must have a unique serial number) and another file to record which certificates have been issued:
 
 ```
-    sudo sh -c "echo '01' > CA/serial"
-    sudo touch CA/index.txt
+    sudo sh -c "echo '01' > PSC/CA/serial"
+    sudo touch PSC/CA/index.txt
 ```
 
-The third file is a CA configuration file (refer PSC/CA/openssl.cnf). Though not strictly necessary, it is very convenient when issuing multiple certificates. Edit openssl.cnf, and change the following fields: Here, directory usr must be directory TS, CP, or DP depending on the keys you want to generate.
+The third file is a CA configuration file (refer PSC/openssl.cnf). Though not strictly necessary, it is very convenient when issuing multiple certificates. Edit openssl.cnf, and change the following fields: Here, directory usr must be directory TS, CP, or DP depending on the keys you want to generate.
 
 ```
     [ CA_default ]
@@ -38,7 +38,7 @@ Also, add default values for country, province, organization, etc.:
     1.organizationName              = Second Organization Name (eg, company)
     1.organizationName_default      = Computer Science Department
     organizationalUnitName          = Organizational Unit Name (eg, section)
-    organizationalUnitName_default  = Differential Tor Project
+    organizationalUnitName_default  = Private Set-Union Cardinality
     commonName                      = Common Name (eg, YOUR name)
     commonName_max                  = 64
     emailAddress                    = Email Address
@@ -93,12 +93,12 @@ Using the CSR, generate a certificate signed by the CA:
 Rename certificate file:
 
 ```
-    sudo mv PSC/<usr>/certs/<index>.pem <usr>/certs/<DP_common_name>.cert
+    sudo mv PSC/<usr>/certs/<index>.pem PSC/<usr>/certs/<DP_common_name>.cert
 ```
 
 Add the user certificate and key in the destined folders:
 
 ```
-    sudo mv <DP_common_name>.csr <usr>/csr/
-    sudo mv <DP_common_name>.key <usr>/private/
+    sudo mv <DP_common_name>.csr PSC/<usr>/csr/
+    sudo mv <DP_common_name>.key PSC/<usr>/private/
 ```
