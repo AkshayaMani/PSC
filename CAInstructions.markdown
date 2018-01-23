@@ -61,7 +61,7 @@ Create the insecure key, the one without a passphrase, and shuffle the key names
 Next, create the self-signed root certificate:
 
 ```
-    sudo openssl req -new -x509 -days 3650 -key <ca_name>.key -out <ca_name>.cert -config openssl.cnf
+    sudo openssl req -new -x509 -days 3650 -key <ca_name>.key -out <ca_name>.cert -config <openssl_configuration_file>
 ```
 
 Add the root certificate and key to the destined folders:
