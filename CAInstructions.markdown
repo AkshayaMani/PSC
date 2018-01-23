@@ -11,13 +11,13 @@ The third file is a CA configuration file (refer PSC/openssl.cnf). Though not st
 
 ```
     [ CA_default ]
-    dir             = ./                 # Where everything is kept
-    database        = $dir/CA/index.txt     # database index file.
-    new_certs_dir   = $dir/<usr>/certs        # default place for new certs.
-    certificate     = $dir/CA/certs/<ca_name>.cert # The CA certificate
-    serial          = $dir/CA/serial        # The current serial number
+    dir             = ./                 		# Where everything is kept
+    database        = $dir/CA/index.txt     		# database index file.
+    new_certs_dir   = $dir/<usr>/certs        		# default place for new certs.
+    certificate     = $dir/CA/certs/<ca_name>.cert	# The CA certificate
+    serial          = $dir/CA/serial        		# The current serial number
     private_key     = $dir/CA/private/<ca_name>.key# The private key
-    default_days    = 3650                  # how long to certify for
+    default_days    = 3650                  		# how long to certify for
     default_bits    = 4096
 ```
 
