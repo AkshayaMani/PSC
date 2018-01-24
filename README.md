@@ -13,10 +13,10 @@ PSC efficiently aggregates the count of unique items across a set of participati
 For more information about PSC, refer:
 
 ```
-    Distributed Measurement with Private Set-Union Cardinality
-    24th ACM Conference on Computer and Communication Security (CCS 2017)
-    Ellis Fenske*, Akshaya Mani*, Aaron Johnson, and Micah Sherr (* co-first authors)
-    https://security.cs.georgetown.edu/~msherr/papers/psc.pdf
+  Distributed Measurement with Private Set-Union Cardinality
+  24th ACM Conference on Computer and Communication Security (CCS 2017)
+  Ellis Fenske*, Akshaya Mani*, Aaron Johnson, and Micah Sherr (* co-first authors)
+  https://security.cs.georgetown.edu/~msherr/papers/psc.pdf
 ```
 
 See LICENSE for licensing information.
@@ -36,9 +36,9 @@ See INSTALL.markdown for details.
 To run PSC, simply activate the virtual environment that you created earlier and then run PSC. For example:
 
 ```
-    nv on <goenvironment_name>
-    ...
-    nv off
+  nv on <goenvironment_name>
+  ...
+  nv off
 ```
 
 
