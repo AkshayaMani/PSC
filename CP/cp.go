@@ -115,7 +115,7 @@ func main() {
         ln, _ = net.Listen("tcp", cp_ip+":6100")
 
         logging.LogToFile("logs/"+cp_cname+time.Now().Local().Format("2006-01-02")+"_"+time.Now().Local().Format("15:04:05"))
-        logging.Info.Println("PSC is a free, open-source software, available for download at <url>")
+        logging.Info.Println("PSC is a free, open-source software, available for download at https://github.com/AkshayaMani/PSC")
         logging.Info.Println("PSC uses https://github.com/postfix/goControlTor library to connect to Tor control port")
         logging.Info.Println("Started Computation Party")
 
