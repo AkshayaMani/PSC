@@ -13,7 +13,8 @@ PSC efficiently aggregates the count of unique items across a set of participati
 For more information about PSC, refer:
 
 ```
-    Ellis Fenske\*, Akshaya Mani\*, Aaron Johnson, and Micah Sherr. [Distributed Measurement with Private Set-Union Cardinality](ccs2017_final.pdf). In ACM Conference on Computer and Communications Security $
+    Ellis Fenske*, Akshaya Mani*, Aaron Johnson, and Micah Sherr. Distributed Measurement with Private 
+    Set-Union Cardinality. In ACM Conference on Computer and Communications Security (CCS), November 2017.
 
     (* co-first authors)
 ```
