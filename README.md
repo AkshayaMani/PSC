@@ -45,7 +45,7 @@ To run PSC, simply activate the virtual environment that you created earlier and
 
 To deploy a PSC network, configure collection period and noise to protect typical user activity.
 
-Send CA certificates to all participants and verify them through a trust chain. Add all CA certificates to PSC/CA/certs folder.
+Send CA certificates to all participants and verify them through a trust chain. Add all CA certificates to PSC/CA/certs.
 
 Install, configure, and start all the Computation Parties and Data Prties.
 
