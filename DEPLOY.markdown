@@ -10,7 +10,7 @@ Generate new CA key for each network that runs PSC. See CAInstructions.markdown 
 
 ## Exchange CA certificates 
 
-Verify CA certificates through a trust chain. Add all CA certificates to PSC/CA/certs folder.
+Send CA certificates to all participants and verify them through a trust chain. Add all CA certificates to PSC/CA/certs folder.
 
 ## Generate Public key pair (TS, CP, DP)
 
