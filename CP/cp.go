@@ -58,7 +58,7 @@ var no_DPs int32 //No. of DPs
 var b int64 //Hash table size
 var n int64 //No. of noise vectors
 
-const ts_hname = "TS" //TS hostname
+const ts_hname = "safecountingTS" //TS hostname
 const ts_ip = "141.161.20.93" //TS IP
 var cp_hname []string //CP hostnames
 var dp_hname []string //DP hostnames
