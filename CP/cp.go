@@ -112,7 +112,8 @@ func main() {
         initValues()
 
         //Listen to the TCP port
-        ln, _ = net.Listen("tcp", cp_ip+":6100")
+        ln, err = net.Listen("tcp", cp_ip+":6100")
+        checkError(err)
 
         logging.LogToFile("logs/"+cp_cname+time.Now().Local().Format("2006-01-02")+"_"+time.Now().Local().Format("15:04:05"))
         logging.Info.Println("PSC is a free, open-source software, available for download at https://github.com/AkshayaMani/PSC")
