@@ -43,7 +43,7 @@ var epoch int //Epoch
 var b int64 //Hash table size
 
 var ts_hname = "TS" //TS hostname
-var ts_ip = "10.176.5.15" //TS IP
+var ts_ip = "141.161.20.93" //TS IP
 var query string //Query
 var cp_hname []string //CP hostnames
 var dp_hname []string //DP hostnames
