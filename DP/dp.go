@@ -42,7 +42,7 @@ var no_DPs int32 //No. of DPs
 var epoch int //Epoch
 var b int64 //Hash table size
 
-var ts_hname = "TS" //TS hostname
+var ts_hname = "safecountingTS" //TS hostname
 var ts_ip = "141.161.20.93" //TS IP
 var query string //Query
 var cp_hname []string //CP hostnames
