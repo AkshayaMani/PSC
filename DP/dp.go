@@ -9,10 +9,12 @@ See LICENSE for licensing information
 package main
 
 import (
+    "bufio"
     "crypto/tls"
     "crypto/x509"
     "encoding/binary"
     "flag"
+    "fmt"
     "gopkg.in/dedis/crypto.v0/abstract"
     "gopkg.in/dedis/crypto.v0/nist"
     "github.com/golang/protobuf/proto"
@@ -42,11 +44,11 @@ var no_DPs int32 //No. of DPs
 var epoch int //Epoch
 var b int64 //Hash table size
 
-var ts_hname = "safecountingTS" //TS hostname
-var ts_ip = "141.161.20.93" //TS IP
+var ts_cname string //TS hostname
+var ts_ip string //TS IP
 var query string //Query
-var cp_hname []string //CP hostnames
-var dp_hname []string //DP hostnames
+var cp_cnames []string //CP common names
+var dp_cnames []string //DP common names
 var cp_ips []string //CP IPs
 var dp_ips []string //DP IPs
 var dp_cname string //DP common name
@@ -75,7 +77,45 @@ func main() {
 
     logging.LogToFile("logs/Connection"+time.Now().Local().Format("2006-01-02")+"_"+time.Now().Local().Format("15:04:05"))
 
-    dp_ip, control_addr, control_port, passwd_file := parseCommandline(os.Args) //Parse DP common name & IP, Tor control address & port no., and hashed password file path
+    dp_ip, control_addr, control_port, passwd_file, tsinfo_file := parseCommandline(os.Args) //Parse DP common name & IP, Tor control address & port no., hashed password file path, and TS information file path
+
+    //Assign TS information
+    file, err := os.Open(tsinfo_file)
+    checkError(err)
+
+    //Read line by line
+    scanner := bufio.NewScanner(file)
+    no_of_lines := 0
+    for scanner.Scan() {
+
+        no_of_lines += 1
+        t := scanner.Text()
+
+        if no_of_lines <= 2 && strings.HasPrefix(t, "IP ") {
+
+            ts_ip = strings.TrimPrefix(t, "IP ") //Assign TS IP
+
+            if net.ParseIP(ts_ip) == nil {
+
+                checkError(fmt.Errorf("%s is not a valid IP", ts_ip))
+            }
+
+        } else if no_of_lines <= 2 && strings.HasPrefix(t, "CN ") {
+
+            ts_cname = strings.TrimPrefix(t, "CN ") //Assign TS common name
+
+            if strings.Contains(ts_cname, " ") {
+
+                checkError(fmt.Errorf("%s is not a valid common name", ts_cname))
+            }
+
+        } else {
+
+            checkError(fmt.Errorf("TS information file %s formatting error", tsinfo_file))
+        }
+    }
+
+    file.Close()
 
     logging.Info.Println("Parsed command-line arguments")
 
@@ -88,6 +128,7 @@ func main() {
         initValues()
 
         //Listen to the TCP port
+        var err error
         ln, err = net.Listen("tcp", dp_ip+":7100")
         checkError(err)
 
@@ -115,7 +156,7 @@ func main() {
                     //Parse Common Name
                     com_name := parseCommonName(conn)
 
-                    if ts_hname == com_name {//If data received from TS
+                    if ts_cname == com_name {//If data received from TS
 
                         //Handle TS connection
                         handleTS(conn, com_name)
@@ -178,7 +219,7 @@ func sendTSSignal(sno uint32) {
     sigb, _ := proto.Marshal(sig)
 
     //Send signal to TS
-    sendDataToDest(sigb, ts_hname, ts_ip+":5100")
+    sendDataToDest(sigb, ts_cname, ts_ip+":5100")
 }
 
 //Input: Client Socket Channel, Client common name
@@ -196,7 +237,7 @@ func handleTS(conn net.Conn, com_name string) {
 
             ts_config_flag = false //Set configuration flag to false
 
-            if com_name == ts_hname { //If data received from TS
+            if com_name == ts_cname { //If data received from TS
 
                 config := new(TSmsg.Config) //TS configuration
                 proto.Unmarshal(buf, config) //Parse TS configuration
@@ -228,7 +269,7 @@ func handleTS(conn net.Conn, com_name string) {
 
         } else {
 
-            if com_name == ts_hname { //If Data Received from TS
+            if com_name == ts_cname { //If Data Received from TS
 
                 sig := new(TSmsg.Signal) //TS signal
                 proto.Unmarshal(buf, sig) //Parse TS signal
@@ -270,7 +311,7 @@ func handleTS(conn net.Conn, com_name string) {
 
                                 //Send key to CP
                                 logging.Info.Println("Sending symmetric key to CP", i,". Step No.", step_no)
-                                sendDataToDest(resp1, cp_hname[i], cp_ips[i]+":6100")
+                                sendDataToDest(resp1, cp_cnames[i], cp_ips[i]+":6100")
 	                    }
 
                             k = nil //Forget keys
@@ -316,7 +357,7 @@ func handleTS(conn net.Conn, com_name string) {
 
                                 //Send data shares to CP
                                 logging.Info.Println("Sending masked data shares to CP", i,". Step No.", step_no)
-                                sendDataToDest(resp1, cp_hname[i], cp_ips[i]+":6100")
+                                sendDataToDest(resp1, cp_cnames[i], cp_ips[i]+":6100")
                             }
                         }
 
@@ -474,20 +515,23 @@ func incrementCounter(event string) {
 }
 
 //Input: Command-line Arguments
+//Output: DP IP, Tor control address, Tor control port, Tor control hashed password file path, TS information file path
 //Function: Parse Command-line Arguments
-func parseCommandline(arg []string) (string, string, string, string) {
+func parseCommandline(arg []string) (string, string, string, string, string) {
 
     var dp_ip string //DP IP
     var e_flag = false //Exit flag
     var control_addr string //Tor control address
     var control_port string //Tor control port
     var passwd_file string //Tor control hashed password file path
+    var tsinfo_file string //TS information file path
 
     flag.StringVar(&dp_cname, "d", "", "DP common name (required)")
     flag.StringVar(&dp_ip, "i", "", "DP IP (required)")
     flag.StringVar(&control_addr, "ca", "127.0.0.1", "Tor control port listen address")
     flag.StringVar(&control_port, "cp", "9051", "Tor control port")
     flag.StringVar(&passwd_file, "pf", "control_password.txt", "Tor control hashed password file path")
+    flag.StringVar(&tsinfo_file, "t", "ts.info", "TS information file path")
     flag.Parse()
 
     if dp_cname == "" || dp_ip == "" {
@@ -513,7 +557,7 @@ func parseCommandline(arg []string) (string, string, string, string) {
         os.Exit(0) //Exit
     }
 
-    return dp_ip, control_addr, control_port, passwd_file
+    return dp_ip, control_addr, control_port, passwd_file, tsinfo_file
 }
 
 //Function: Initialize variables
@@ -524,8 +568,8 @@ func initValues() {
     epoch = 0 //Epoch
     b = 0 //Hash table size
 
-    cp_hname = nil //CP hostnames
-    dp_hname = nil //DP hostnames
+    cp_cnames = nil //CP common names
+    dp_cnames = nil //DP common names
     cp_ips = nil //CP IPs
     dp_ips = nil //DP IPs
     f_flag = false //Finish flag
@@ -550,17 +594,24 @@ func assignConfig(config *TSmsg.Config) {
     epoch = int(*config.Epoch) //Epoch
     no_CPs = *config.Ncps //No. of CPs
     query = *config.Query //Query
-    cp_hname = make([]string, no_CPs) //CP hostnames
+
+    if _, ok := q_to_e[query]; !ok { //Check if query is valid 
+
+        checkError(fmt.Errorf("%s is not a valid Query", query))
+    }
+
+
+    cp_cnames = make([]string, no_CPs) //CP common names
     cp_ips = make([]string, no_CPs) //CP IPs
 
-    copy(cp_hname[:], config.CPhname) //Assign CP hostnames
+    copy(cp_cnames[:], config.CPcnames) //Assign CP common names
     copy(cp_ips[:], config.CPips) //Assign CP IPs
 
     no_DPs = *config.Ndps //No. of DPs
-    dp_hname = make([]string, no_DPs) //DP hostnames
+    dp_cnames = make([]string, no_DPs) //DP common names
     dp_ips = make([]string, no_DPs) //DP IPs
 
-    copy(dp_hname[:], config.DPhname) //Assign DP hostnames
+    copy(dp_cnames[:], config.DPcnames) //Assign DP common names
     copy(dp_ips[:], config.DPips) //Assign DP IPs
 
     b = *config.Tsize //Hash table size
@@ -669,7 +720,7 @@ func acceptConnections() {
     }
 }
 
-func sendDataToDest(data []byte, dst_hname string, dst_addr string) {
+func sendDataToDest(data []byte, dst_cname string, dst_addr string) {
 
     //Load Private Key and Certificate
     cert, err := tls.LoadX509KeyPair("certs/" + dp_cname + ".cert", "private/" + dp_cname + ".key")
@@ -688,7 +739,7 @@ func sendDataToDest(data []byte, dst_hname string, dst_addr string) {
     }
 
     //Dial TCP Connection
-    config := tls.Config{Certificates: []tls.Certificate{cert}, RootCAs: caCertPool, ServerName: dst_hname,} //InsecureSkipVerify: true,}
+    config := tls.Config{Certificates: []tls.Certificate{cert}, RootCAs: caCertPool, ServerName: dst_cname,} //InsecureSkipVerify: true,}
     con,err := net.Dial("tcp", dst_addr)
     checkError(err)
 

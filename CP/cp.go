@@ -9,12 +9,14 @@ See LICENSE for licensing information
 package main
 
 import (
+    "bufio"
     "bytes"
     "crypto/tls"
     "crypto/x509"
     "encoding/binary"
     "errors"
     "flag"
+    "fmt"
     "gopkg.in/dedis/crypto.v0/abstract"
     "gopkg.in/dedis/crypto.v0/hash"
     "gopkg.in/dedis/crypto.v0/nist"
@@ -58,10 +60,10 @@ var no_DPs int32 //No. of DPs
 var b int64 //Hash table size
 var n int64 //No. of noise vectors
 
-const ts_hname = "safecountingTS" //TS hostname
-const ts_ip = "141.161.20.93" //TS IP
-var cp_hname []string //CP hostnames
-var dp_hname []string //DP hostnames
+var ts_cname string //TS common name
+var ts_ip string //TS IP
+var cp_cnames []string //CP common names
+var dp_cnames []string //DP common names
 var cp_ips []string //CP IPs
 var dp_ips []string //DP IPs
 var cp_cname string //CP common name
@@ -102,7 +104,45 @@ func main() {
 
     logging.LogToFile("logs/Connection"+time.Now().Local().Format("2006-01-02")+"_"+time.Now().Local().Format("15:04:05"))
 
-    cp_ip := parseCommandline(os.Args) //Parse CP common name
+    cp_ip, tsinfo_file := parseCommandline(os.Args) //Parse CP common name & IP and TS information file path
+
+    //Assign TS information
+    file, err := os.Open(tsinfo_file)
+    checkError(err)
+
+    //Read line by line
+    scanner := bufio.NewScanner(file)
+    no_of_lines := 0
+    for scanner.Scan() {
+
+        no_of_lines += 1
+        t := scanner.Text()
+
+        if no_of_lines <= 2 && strings.HasPrefix(t, "IP ") {
+
+            ts_ip = strings.TrimPrefix(t, "IP ") //Assign TS IP
+
+            if net.ParseIP(ts_ip) == nil {
+
+                checkError(fmt.Errorf("%s is not a valid IP", ts_ip))
+            }
+
+        } else if no_of_lines <= 2 && strings.HasPrefix(t, "CN ") {
+
+            ts_cname = strings.TrimPrefix(t, "CN ") //Assign TS common name
+
+            if strings.Contains(ts_cname, " ") {
+
+                checkError(fmt.Errorf("%s is not a valid common name", ts_cname))
+            }
+
+        } else {
+
+            checkError(fmt.Errorf("TS information file %s formatting error", tsinfo_file))
+        }
+    }
+
+    file.Close()
 
     logging.Info.Println("Parsed command-line arguments")
 
@@ -112,6 +152,7 @@ func main() {
         initValues()
 
         //Listen to the TCP port
+        var err error
         ln, err = net.Listen("tcp", cp_ip+":6100")
         checkError(err)
 
@@ -141,7 +182,7 @@ func main() {
                     //Parse Common Name
                     com_name := parseCommonName(conn)
 
-                    if contains(dp_hname, com_name) {//If data received from DP
+                    if contains(dp_cnames, com_name) {//If data received from DP
 
                         wg.Add(1) //Increment WaitGroup counter
 
@@ -151,7 +192,7 @@ func main() {
                         //Add DPconnection to channel
                         dpconn <- conn
 
-                    } else if contains(cp_hname, com_name) {//If data received from CP
+                    } else if contains(cp_cnames, com_name) {//If data received from CP
 
                         wg.Add(1) //Increment WaitGroup counter
 
@@ -161,7 +202,7 @@ func main() {
                         //Add CPconnection to channel
                         cpconn <- conn
 
-                    } else if ts_hname == com_name {//If data received from TS
+                    } else if ts_cname == com_name {//If data received from TS
 
                         //Receive Data
                         buf := receiveData(conn)
@@ -261,7 +302,7 @@ func sendTSSignal(sno uint32) {
     sigb, _ := proto.Marshal(sig)
 
     //Send signal to TS
-    sendDataToDest(sigb, ts_hname, ts_ip+":5100")
+    sendDataToDest(sigb, ts_cname, ts_ip+":5100")
 }
 
 //Input: DP socket channel
@@ -806,7 +847,7 @@ func handleCPs(cpconn chan net.Conn, com_name string) {
                         resultb, _ := proto.Marshal(result)
 
                         //Send signal to TS
-                        sendDataToDest(resultb, ts_hname, ts_ip+":5100")
+                        sendDataToDest(resultb, ts_cname, ts_ip+":5100")
                     }
 
                     cp_bcast = 0 //Set CP0 as Broadcasting CP
@@ -865,7 +906,7 @@ func broadcastCPData() {
 
                 if i != cp_no {
 
-                    sendDataToDest(resp1, cp_hname[i], cp_ips[i]+":6100")
+                    sendDataToDest(resp1, cp_cnames[i], cp_ips[i]+":6100")
                 }
             }
 
@@ -917,7 +958,7 @@ func broadcastCPData() {
 
                 if i != cp_no {
 
-                    sendDataToDest(resp1, cp_hname[i], cp_ips[i]+":6100")
+                    sendDataToDest(resp1, cp_cnames[i], cp_ips[i]+":6100")
                 }
             }
 
@@ -1236,7 +1277,7 @@ func broadcastCPData() {
                     resultb, _ := proto.Marshal(result)
 
                     //Send signal to TS
-                    sendDataToDest(resultb, ts_hname, ts_ip+":5100")
+                    sendDataToDest(resultb, ts_cname, ts_ip+":5100")
                 }
 
                 cp_bcast = 0 //Set CP0 as Broadcasting CP
@@ -1255,14 +1296,17 @@ func broadcastCPData() {
 }
 
 //Input: Command-line Arguments
+//Output: CP IP, TS information file path
 //Function: Parse Command-line Arguments
-func parseCommandline(arg []string) (string){
+func parseCommandline(arg []string) (string, string){
 
     var cp_ip string //CP IP
     var e_flag = false //Exit flag
+    var tsinfo_file string //TS information file path
 
     flag.StringVar(&cp_cname, "c", "", "CP common name (required)")
     flag.StringVar(&cp_ip, "i", "", "CP IP (required)")
+    flag.StringVar(&tsinfo_file, "t", "ts.info", "TS information file path")
     flag.Parse()
 
     if cp_cname == "" || cp_ip == "" {
@@ -1288,8 +1332,9 @@ func parseCommandline(arg []string) (string){
         os.Exit(0) //Exit
     }
 
-    return cp_ip
+    return cp_ip, tsinfo_file
 }
+
 
 //Function: Initialize variables
 func initValues() {
@@ -1301,8 +1346,8 @@ func initValues() {
     b = 0 //Hash table size
     n = 0 //No. of noise vectors
 
-    cp_hname = nil //CP hostnames
-    dp_hname = nil //DP hostnames
+    cp_cnames = nil //CP common names
+    dp_cnames = nil //DP common names
     cp_ips = nil //CP IPs
     dp_ips = nil //DP IPs
     cp_no = 0 //CP number
@@ -1348,17 +1393,17 @@ func assignConfig(config *TSmsg.Config) {
     n = int64(math.Floor((math.Log(2 / delta) * 64)/math.Pow(epsilon, 2))) + 1 //No. of Noise vectors
 
     no_CPs = *config.Ncps //No. of CPs
-    cp_hname = make([]string, no_CPs) //CP hostnames
+    cp_cnames = make([]string, no_CPs) //CP common names
     cp_ips = make([]string, no_CPs) //CP IPs
 
-    copy(cp_hname[:], config.CPhname) //Assign CP hostnames
+    copy(cp_cnames[:], config.CPcnames) //Assign CP common names
     copy(cp_ips[:], config.CPips) //Assign CP IPs
 
     no_DPs = *config.Ndps //No. of DPs
-    dp_hname = make([]string, no_DPs) //DP hostnames
+    dp_cnames = make([]string, no_DPs) //DP common names
     dp_ips = make([]string, no_DPs) //DP IPs
 
-    copy(dp_hname[:], config.DPhname) //Assign DP hostnames
+    copy(dp_cnames[:], config.DPcnames) //Assign DP common names
     copy(dp_ips[:], config.DPips) //Assign DP IPs
 
     b = *config.Tsize //Hash table size
@@ -1378,7 +1423,7 @@ func assignConfig(config *TSmsg.Config) {
 
     cp_no = 0 //CP Number
 
-    for _, cp := range cp_hname {
+    for _, cp := range cp_cnames {
 
         if cp_cname == cp {
 
@@ -1418,9 +1463,9 @@ func assignConfig(config *TSmsg.Config) {
     }
 }
 
-//Input: Data, Destination hostname, Destination ip
+//Input: Data, Destination common name, Destination ip
 //Function: Send Data to Destination
-func sendDataToDest(data []byte, dst_hname string, dst_addr string) {
+func sendDataToDest(data []byte, dst_cname string, dst_addr string) {
 
     //Load Private Key and Certificate
     cert, err := tls.LoadX509KeyPair("certs/" + cp_cname + ".cert", "private/" + cp_cname + ".key")
@@ -1439,7 +1484,7 @@ func sendDataToDest(data []byte, dst_hname string, dst_addr string) {
     }
 
     //Dial TCP Connection
-    config := tls.Config{Certificates: []tls.Certificate{cert}, RootCAs: caCertPool, ServerName: dst_hname,} //InsecureSkipVerify: true,}
+    config := tls.Config{Certificates: []tls.Certificate{cert}, RootCAs: caCertPool, ServerName: dst_cname,} //InsecureSkipVerify: true,}
     con,err := net.Dial("tcp", dst_addr)
     checkError(err)
 
@@ -1550,7 +1595,7 @@ func broadcastData(step_no uint32, data []byte) {
         //Send to all other CPs
         if i != int(cp_no) {
 
-            sendDataToDest(sign_msg, cp_hname[i], cp_ips[i]+":6100")
+            sendDataToDest(sign_msg, cp_cnames[i], cp_ips[i]+":6100")
         }
     }
 }
@@ -1584,7 +1629,7 @@ func sendDataN_1(step_no uint32, src int, data []byte) {
         //Send to other n-1 CPs
         if i != int(cp_no) && i != src {
 
-            sendDataToDest(sign_msg, cp_hname[i], cp_ips[i]+":6100")
+            sendDataToDest(sign_msg, cp_cnames[i], cp_ips[i]+":6100")
         }
     }
 }
