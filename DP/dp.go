@@ -326,7 +326,7 @@ func handleTS(conn net.Conn) {
 
                         logging.Info.Println("Started data collection")
 
-                        wg.Add(1) //Increment WaitGroup counter                            
+                        wg.Add(1) //Increment WaitGroup counter
 
                         go collectData() //Start collecting data
 
@@ -664,7 +664,7 @@ func assignConfig(config *TSmsg.Config) {
     no_CPs = *config.Ncps //No. of CPs
     query = *config.Query //Query
 
-    if _, ok := q_to_e[query]; !ok { //Check if query is valid 
+    if _, ok := q_to_e[query]; !ok { //Check if query is valid
 
         checkError(fmt.Errorf("%s is not a valid Query", query))
     }
