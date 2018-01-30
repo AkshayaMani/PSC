@@ -26,7 +26,7 @@ import (
     "net"
     "os"
     "PSC/DP/dpres"
-    "PSC2/goControlTor"
+    "PSC/goControlTor"
     "PSC/logging"
     "PSC/match"
     "PSC/TS/tsmsg"
@@ -62,11 +62,14 @@ var clients chan net.Conn //Channel to handle simultaneous client connections
 var k []abstract.Scalar //CP-DP Keys
 var c []abstract.Scalar //Ciphers
 var cs [][]abstract.Scalar //Cipher share
+var mutex = &sync.Mutex{} //Mutex to lock common client variable
 var wg = &sync.WaitGroup{} //WaitGroup to wait for all goroutines to shutdown
 
 var torControl = &goControlTor.TorControl{} //Tor control port connection
 var domain_map = map[string]bool{} //Domain map
 var message chan string //Channel to receive message from Tor control port
+var data_col_sig chan bool //Channel to send data collection signal
+var d_flag bool //Data collection finish Flag
 var q_to_e = map[string]string{ //Map query
 
     "ExitFirstLevelDomainWebInitialStream": "PRIVCOUNT_STREAM_ENDED",
@@ -140,7 +143,7 @@ func main() {
         wg.Add(1) //Increment WaitGroup counter
 
         go acceptConnections() //Accept connections
-
+ 
         wg.Add(1) //Increment WaitGroup counter
 
         go torControlPortReceive(torControl) //Receive events from Tor control port
@@ -159,7 +162,7 @@ func main() {
                     if ts_cname == com_name {//If data received from TS
 
                         //Handle TS connection
-                        handleTS(conn, com_name)
+                        handleTS(conn)
 
                     } else { //If not TS
 
@@ -168,7 +171,11 @@ func main() {
 
                 case msg := <- message:
 
+                    mutex.Lock() //Lock mutex
+
                     event, _, _, log := torControl.CommandParse(msg) //Print command
+
+                    mutex.Unlock() //Unlock mutex
 
                     if log != "" { //If log set
 
@@ -195,8 +202,6 @@ func main() {
                     }
 
                 case <-finish:
-
-                    close(message) //Close Tor control port message channel
 
                     wg.Wait() //Wait for all go routines to finish
 
@@ -238,9 +243,9 @@ func sendTSSignal(sno uint32) {
     sendDataToDest(sigb, ts_cname, ts_ip+":5100")
 }
 
-//Input: Client Socket Channel, Client common name
-//Function: Handle client connection
-func handleTS(conn net.Conn, com_name string) {
+//Input: TS Socket
+//Function: Handle TS connection
+func handleTS(conn net.Conn) {
 
     //Receive Data
     buf := receiveData(conn)
@@ -253,145 +258,134 @@ func handleTS(conn net.Conn, com_name string) {
 
             ts_config_flag = false //Set configuration flag to false
 
-            if com_name == ts_cname { //If data received from TS
+            config := new(TSmsg.Config) //TS configuration
+            proto.Unmarshal(buf, config) //Parse TS configuration
 
-                config := new(TSmsg.Config) //TS configuration
-                proto.Unmarshal(buf, config) //Parse TS configuration
+            assignConfig(config) //Assign configuration
 
-                assignConfig(config) //Assign configuration
+            if query == "ExitFirstLevelDomainAlexa1MWebInitialStream" {
 
-                if query == "ExitFirstLevelDomainAlexa1MWebInitialStream" {
+                domain_list := match.LoadDomainList("domain-top-fld-1m.txt")
 
-                    domain_list := match.LoadDomainList("domain-top-fld-1m.txt")
-
-                    domain_map = match.ExactMatchCreateMap(domain_list)
-                }
-
-                logging.Info.Println("Sending TS signal. Step No.", step_no)
-                sendTSSignal(ts_s_no+step_no) //Send signal to TS
-
-                step_no = 1 //TS step no.
-
-            } else { //Data not received from TS
-
-                logging.Warning.Println("Data sent by", com_name, "ignored")
-
-                f_flag = true //Set finish flag
-
-                sendTSSignal(ts_s_no+step_no) //Send finish signal to TS
-
-                return
+                domain_map = match.ExactMatchCreateMap(domain_list)
             }
+
+            logging.Info.Println("Sending TS signal. Step No.", step_no)
+            sendTSSignal(ts_s_no+step_no) //Send signal to TS
+
+            step_no = 1 //TS step no.
 
         } else {
 
-            if com_name == ts_cname { //If Data Received from TS
+            sig := new(TSmsg.Signal) //TS signal
+            proto.Unmarshal(buf, sig) //Parse TS signal
 
-                sig := new(TSmsg.Signal) //TS signal
-                proto.Unmarshal(buf, sig) //Parse TS signal
+            if *sig.Fflag == true { //If finish flag set
 
-                if *sig.Fflag == true { //If finish flag set
+                logging.Info.Println("TS sent finish")
+                shutdownDP() //Shutdown DP gracefully
 
-                    logging.Info.Println("TS sent finish")
-                    shutdownDP() //Shutdown DP gracefully
+            } else { //Finish flag not set
 
-                } else { //Finish flag not set
+                if *sig.SNo == int32(ts_s_no+step_no) { //Check TS step no.
 
-                    if *sig.SNo == int32(ts_s_no+step_no) { //Check TS step no.
+                    suite := nist.NewAES128SHA256P256()
+                    rand := suite.Cipher(abstract.RandomKey)
 
-                        suite := nist.NewAES128SHA256P256()
-                        rand := suite.Cipher(abstract.RandomKey)
+                    if step_no == 1 { //If step no. 1
 
-                        if step_no == 1 { //If step no. 1
+                        //Iterate over all CPs
+                        for i := int32(0); i < no_CPs; i++ {
 
-                            //Iterate over all CPs
-                            for i := int32(0); i < no_CPs; i++ {
+                            resp := new(DPres.Response) //CP-DP keys
+                            resp.TSsno = proto.Int32(int32(ts_s_no+step_no)) //Initialize step no.
 
-                                resp := new(DPres.Response) //CP-DP keys
-                                resp.TSsno = proto.Int32(int32(ts_s_no+step_no)) //Initialize step no.
-
-                                //Initialize CP-DP key
-                                resp.M = make([][]byte, b)
-
-                                //Iterate over hash table
-                                for j := int64(0); j < b; j++ {
-
-                                    k[j] = suite.Scalar().Pick(rand) //Choose random keys
-                                    resp.M[j] = k[j].Bytes() //Assign CP-DP keys
-
-                                    c[j] = suite.Scalar().Add(c[j], k[j]) //Add keys to each counter
-                                }
-
-                                //Convert to bytes
-                                resp1, _ := proto.Marshal(resp)
-
-                                //Send key to CP
-                                logging.Info.Println("Sending symmetric key to CP", i,". Step No.", step_no)
-                                sendDataToDest(resp1, cp_cnames[i], cp_ips[i]+":6100")
-	                    }
-
-                            k = nil //Forget keys
-
-                        } else if step_no == 2 { //If step no. 2
-
-                            logging.Info.Println("Started data collection")
-
-                            collectData() //Start collecting data
-
-                        } else if step_no == 3 { //If step no. 3
+                            //Initialize CP-DP key
+                            resp.M = make([][]byte, b)
 
                             //Iterate over hash table
-                            for i := int64(0); i < b; i++ {
+                            for j := int64(0); j < b; j++ {
 
-                                tmp := suite.Scalar().Zero() //Sum of random shares except last CP's
+                                k[j] = suite.Scalar().Pick(rand) //Choose random keys
+                                resp.M[j] = k[j].Bytes() //Assign CP-DP keys
 
-                                //Iterate over all CPs
-                                for j := int32(0); j < no_CPs - 1; j++ {
-
-                                    cs[i][j] = suite.Scalar().Pick(rand) //Choose Random Value
-                                    tmp = suite.Scalar().Add(cs[i][j], tmp) //Add CP masked data share
-                                }
-
-                                cs[i][no_CPs - 1] = suite.Scalar().Sub(c[i], tmp) //Compute last data share
+                                c[j] = suite.Scalar().Add(c[j], k[j]) //Add keys to each counter
                             }
+
+                            //Convert to bytes
+                            resp1, _ := proto.Marshal(resp)
+
+                            //Send key to CP
+                            logging.Info.Println("Sending symmetric key to CP", i,". Step No.", step_no)
+                            sendDataToDest(resp1, cp_cnames[i], cp_ips[i]+":6100")
+	                }
+
+                        k = nil //Forget keys
+
+                    } else if step_no == 2 { //If step no. 2
+
+                        logging.Info.Println("Started data collection")
+
+                        wg.Add(1) //Increment WaitGroup counter                            
+
+                        go collectData() //Start collecting data
+
+                    } else if step_no == 3 && d_flag == true { //If step no. 3 and data collection finished
+
+                        //Iterate over hash table
+                        for i := int64(0); i < b; i++ {
+
+                            tmp := suite.Scalar().Zero() //Sum of random shares except last CP's
 
                             //Iterate over all CPs
-                            for i := int32(0); i < no_CPs; i++ {
+                            for j := int32(0); j < no_CPs - 1; j++ {
 
-                                resp := new(DPres.Response) //DP step no. and masked data share
-                                resp.TSsno = proto.Int32(int32(ts_s_no+step_no)) //Initialize step no.
-                                resp.M = make([][]byte, b) //Initialize masked data share
-
-                                //Iterate over hash table
-                                for j := int64(0); j < b; j++ {
-
-                                    resp.M[j] = cs[j][i].Bytes()
-                                }
-
-                                //Convert to bytes
-                                resp1, _ := proto.Marshal(resp)
-
-                                //Send data shares to CP
-                                logging.Info.Println("Sending masked data shares to CP", i,". Step No.", step_no)
-                                sendDataToDest(resp1, cp_cnames[i], cp_ips[i]+":6100")
+                                cs[i][j] = suite.Scalar().Pick(rand) //Choose Random Value
+                                tmp = suite.Scalar().Add(cs[i][j], tmp) //Add CP masked data share
                             }
+
+                            cs[i][no_CPs - 1] = suite.Scalar().Sub(c[i], tmp) //Compute last data share
                         }
+
+                        //Iterate over all CPs
+                        for i := int32(0); i < no_CPs; i++ {
+
+                            resp := new(DPres.Response) //DP step no. and masked data share
+                            resp.TSsno = proto.Int32(int32(ts_s_no+step_no)) //Initialize step no.
+                            resp.M = make([][]byte, b) //Initialize masked data share
+
+                            //Iterate over hash table
+                            for j := int64(0); j < b; j++ {
+
+                                resp.M[j] = cs[j][i].Bytes()
+                            }
+
+                            //Convert to bytes
+                            resp1, _ := proto.Marshal(resp)
+
+                            //Send data shares to CP
+                            logging.Info.Println("Sending masked data shares to CP", i,". Step No.", step_no)
+                            sendDataToDest(resp1, cp_cnames[i], cp_ips[i]+":6100")
+                        }
+                    }
+
+                    if step_no != 2 {
 
                         sendTSSignal(ts_s_no+step_no) //Send signal to TS
                         logging.Info.Println("Sent TS signal ", step_no)
-
-                        step_no += 1 //Increment step no.
-
-                    } else { //Wrong signal from TS
-
-                        logging.Error.Println("Wrong signal from TS")
-
-                        f_flag = true //Set finish flag
-
-                        sendTSSignal(ts_s_no+step_no) //Send finish signal to TS
-
-                        return
                     }
+
+                    step_no += 1 //Increment step no.
+
+                } else { //Wrong signal from TS
+
+                    logging.Error.Println("Wrong signal from TS")
+
+                    f_flag = true //Set finish flag
+
+                    sendTSSignal(ts_s_no+step_no) //Send finish signal to TS
+
+                    return
                 }
             }
         }
@@ -442,8 +436,16 @@ func torControlPortConnect(control_addr, control_port, passwd_file string) {
 //Function: Collect data from Tor using oblivious counters
 func collectData () {
 
+    defer wg.Done() //Decrement counter when goroutine completes
+
+    mutex.Lock() //Lock mutex
+
     err, log := torControl.StartCollection(q_to_e[query])
     checkError(err)
+
+    mutex.Unlock() //Unlock mutex
+
+    data_col_sig <- true //Send data collection start signal
 
     if log != "" { //If log set
 
@@ -461,10 +463,19 @@ func collectData () {
         }
     }
 
-    time.Sleep(24 * time.Duration(epoch) * time.Hour) //Collect data for an epoch
+    <- data_col_sig //Wait for data collection finish signal
+
+    mutex.Lock() //Lock mutex
 
     err = torControl.StopCollection()
     checkError(err)
+
+    d_flag = true //Set data collection finish flag
+
+    sendTSSignal(ts_s_no+2) //Send signal to TS
+    logging.Info.Println("Sent TS signal ", 2)
+
+    mutex.Unlock() //Unlock mutex
 }
 
 //Input: Tor control port connection
@@ -473,25 +484,30 @@ func torControlPortReceive(torControl *goControlTor.TorControl) {
 
     defer wg.Done() //Decrement counter when goroutine completes
 
+    <- data_col_sig //Wait for data collection start signal
+
+    torControl.SetTimeOut(time.Now().Add(24 * time.Duration(epoch) * time.Hour)) //Collect for an epoch
+
     for {
 
-	select {
+        msg, err := torControl.ReceiveCommand() //Receive command
 
-            case _, ok := <- message:
+        if  err != nil {
 
-                if !ok {
+            if strings.HasSuffix(err.Error(), "i/o timeout") { //If timeout error
 
-                    return
+                data_col_sig <- true //Send data collection finish signal
 
-                } else {
+                return
 
-                    msg, err := torControl.ReceiveCommand() //Receive command
-                    checkError(err)
+            } else {
 
-                    message <- msg
-                }
+                checkError(err) //Check error
+            }
 
-            default:
+        } else {
+
+            message <- msg //Send message to parse
         }
     }
 }
@@ -623,16 +639,19 @@ func initValues() {
     cp_ips = nil //CP IPs
     dp_ips = nil //DP IPs
     f_flag = false //Finish flag
+    d_flag = false //Data collection finish flag
     step_no = 0 //DP step no.
     ts_s_no = 0 //TS session no.
     ts_config_flag = true //TS configuration flag
     ln = nil //Server listener
     finish = make(chan bool) //Channel to send finish flag
     message = make(chan  string) //Channel to receive message from Tor control port
+    data_col_sig = make(chan bool) //Channel to send data collection signal
     clients = make(chan net.Conn) //Channel to handle simultaneous client connections
     k = nil //CP-DP Keys
     c = nil //Ciphers
     cs = nil //Cipher shares
+    mutex = &sync.Mutex{} //Mutex to lock common client variable
     wg = &sync.WaitGroup{} //WaitGroup to wait for all goroutines to shutdown
 }
 

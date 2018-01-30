@@ -72,6 +72,8 @@ func main() {
 
     expt_no := 0 //Set measurement no. to 0
 
+    restart := false //Restart flag for experiments
+
     for{
 
         //Initialize global variables
@@ -87,9 +89,15 @@ func main() {
         logging.Info.Println("PSC uses https://github.com/postfix/goControlTor library to connect to Tor control port")
         logging.Info.Println("Sleeping...")
 
-        if expt_no != 0 {
+        if restart == true { //If re-started experiment
 
-            time.Sleep(24 * time.Duration(epoch) * time.Hour) //Sleep for 10 minutes before starting
+            restart = false //Set restart flag to false
+
+            time.Sleep(10 * time.Minute) //Sleep for 10 minutes before re-starting
+
+        } else if expt_no != 0 { //If not 1st experiment
+
+            time.Sleep(24 * time.Duration(epoch) * time.Hour) //Sleep for an epoch before starting
         }
 
         logging.Info.Println("Started Tally Server")
@@ -218,6 +226,7 @@ func main() {
 
                             expt_no = expt_no - 1 //Decrement measurement no.
 
+                            restart = true //Set restart experiment flag
                         }
 
                         break loop
@@ -241,6 +250,8 @@ func main() {
                 logging.Info.Println("Continue running", no_Expts, "measurments")
 
                 expt_no = 0 //Reset measurement no.
+
+                ln.Close()
 
             } else if exit == "Y" || exit == "y" {
 

@@ -29,41 +29,45 @@ import (
     "net"
     "net/textproto"
     "strings"
+    "time"
 )
 
 const (
-    cmdOK = 250
-    authNonceLength = 32
-    authServerHashKey = "Tor safe cookie authentication server-to-controller hash"
-    authClientHashKey = "Tor safe cookie authentication controller-to-server hash"
+    cmdOK = 250 //OK response
+    authNonceLength = 32 //Authchallenge nonce length
+    authServerHashKey = "Tor safe cookie authentication server-to-controller hash" //Safe-cookie authentication prefix string server to controller
+    authClientHashKey = "Tor safe cookie authentication controller-to-server hash" //Safe-cookie authentication prefix string controller to server
 )
 
 type TorControl struct {
 
-    controlConn net.Conn
-    textprotoReader *textproto.Reader
-    state string
-    auth_methods []string
-    cookie_file  string
-    passwd_file string
-    server_nonce []byte
-    client_nonce []byte
-    event string
-    has_received_event bool
+    controlConn net.Conn //Tor control connection
+    textprotoReader *textproto.Reader //Tor control port reader
+    state string //Tor control port state
+    auth_methods []string //Tor control port authentication methods supported
+    cookie_file  string //Tor control port Safe-cookie authentication file
+    passwd_file string //Tor control port hashed password file
+    server_nonce []byte //Server nonce
+    client_nonce []byte //Client nonce
+    event string //Registered event
+    has_received_event bool //Received event flag
 }
 
-// Dial Tor control port
+//Input: Network protocol, address, port
+//Output: Error
+//Function: Dial Tor control port
 func (t *TorControl) Dial(network, addr, passwd_file string) error {
 
     var err error = nil
 
-    t.controlConn, err = net.Dial(network, addr)
+    t.controlConn, err = net.Dial(network, addr) //Dial control port
 
     if err != nil {
 
         return err
     }
 
+    //Initialize Tor control state parameters
     reader := bufio.NewReader(t.controlConn)
     t.textprotoReader = textproto.NewReader(reader)
     t.passwd_file = passwd_file
@@ -73,9 +77,11 @@ func (t *TorControl) Dial(network, addr, passwd_file string) error {
     return nil
 }
 
+//Output: Command, Error
+//Function: Receive command from Tor control port
 func (t *TorControl) ReceiveCommand() (string, error) {
 
-    command, err := t.textprotoReader.ReadLine()
+    command, err := t.textprotoReader.ReadLine() //Read command
 
     if err != nil {
 
@@ -85,9 +91,12 @@ func (t *TorControl) ReceiveCommand() (string, error) {
     return command, nil
 }
 
+//Input: Command
+//Output: Error
+//Function: Send command to Tor control port
 func (t *TorControl) SendCommand(command string) error {
 
-    _, err := t.controlConn.Write([]byte(command))
+    _, err := t.controlConn.Write([]byte(command)) //Send command
 
     if err != nil {
 
@@ -97,7 +106,9 @@ func (t *TorControl) SendCommand(command string) error {
     return nil
 }
 
-
+//Input: Command
+//Output: Event, State, Error, Log string prepended with log type
+//Function: Parse command received from Tor control port
 func (t *TorControl) CommandParse(message string) ([]string, string, error, string) {
 
     var log string
@@ -133,7 +144,7 @@ func (t *TorControl) CommandParse(message string) ([]string, string, error, stri
 
         } else if message == "250 OK" {
 
-            if contains(t.auth_methods, "SAFECOOKIE") && t.cookie_file != ""  {
+            if contains(t.auth_methods, "SAFECOOKIE") && t.cookie_file != ""  { //Safe-cookie method
 
                 err := t.SafeCookieAuthChallenge()
 
@@ -144,7 +155,7 @@ func (t *TorControl) CommandParse(message string) ([]string, string, error, stri
 
                 t.state = "authchallenge"
 
-            } else if contains(t.auth_methods, "HASHEDPASSWORD") {
+            } else if contains(t.auth_methods, "HASHEDPASSWORD") { //Hashed password method
 
                 err := t.PasswordAuthenticate()
 
@@ -155,7 +166,7 @@ func (t *TorControl) CommandParse(message string) ([]string, string, error, stri
 
                 t.state = "authenticating"
 
-            } else if contains(t.auth_methods, "NULL") {
+            } else if contains(t.auth_methods, "NULL") { //NULL method
 
                 log = "Info:" + "Authenticating with NULL method" //Prepend with log type
 
@@ -168,7 +179,7 @@ func (t *TorControl) CommandParse(message string) ([]string, string, error, stri
 
                 t.state = "authenticating"
 
-            } else {
+            } else { //No authentication method implemented
 
                 return nil, "", fmt.Errorf("Authentication methods not implemented"), log
             }
@@ -178,7 +189,7 @@ func (t *TorControl) CommandParse(message string) ([]string, string, error, stri
             return nil, "", fmt.Errorf("%s", message), log
         }
 
-    } else if t.state == "authchallenge" && strings.HasPrefix(message, "250 AUTHCHALLENGE SERVERHASH=") {
+    } else if t.state == "authchallenge" && strings.HasPrefix(message, "250 AUTHCHALLENGE SERVERHASH=") { //Safe-cookie authentication challenge received
 
         err := t.SafeCookieAuthenticate(message)
 
@@ -191,26 +202,26 @@ func (t *TorControl) CommandParse(message string) ([]string, string, error, stri
 
     } else if t.state == "authenticating" && message == "250 OK" {
 
-        t.state = "waiting"
+        t.state = "waiting" //Wait for event registration
 
     } else if t.state == "waiting" && strings.HasPrefix(message, "2") {
 
         log = "Info:" + "OK response" //Prepend with log type
 
-    } else if t.state == "processing" && strings.HasPrefix(message, "650 PRIVCOUNT_") {
+    } else if t.state == "processing" && strings.HasPrefix(message, "650 PRIVCOUNT_") { //Event received
 
         parts := strings.Split(message, " ")
-        t.has_received_event = true
+        t.has_received_event = true //Set event received flag
 
-        if parts[1] != t.event {
+        if parts[1] != t.event { //Unwanted event type
 
-            log = "Info:" + "Unwanted event type" + parts[1] //Prepend with log type
+            log = "Info:" + "Unwanted event type " + parts[1] //Prepend with log type
 
-        } else if len(parts) <= 2 {
+        } else if len(parts) <= 2 { //Event with no data
 
-            log = "Info:" + "Event with no data" + message //Prepend with log type
+            log = "Info:" + "Event with no data " + message //Prepend with log type
 
-        } else {
+        } else { //Send event without code
 
             return parts[1:], t.state, nil, log
         }
@@ -219,6 +230,8 @@ func (t *TorControl) CommandParse(message string) ([]string, string, error, stri
     return nil, t.state, nil, log
 }
 
+//Output: Error
+//Function: Send Authchallenge nonce to Tor control port
 func (t *TorControl) SafeCookieAuthChallenge() error {
 
     //Generating challenge nonce
@@ -247,6 +260,9 @@ func (t *TorControl) SafeCookieAuthChallenge() error {
     return err
 }
 
+//Input: Safe-cookie authentication challenge
+//Output: Error
+//Function: Safe-cookie authenticate
 func (t *TorControl) SafeCookieAuthenticate(message string) error {
 
     //Reading cookie file
@@ -257,6 +273,7 @@ func (t *TorControl) SafeCookieAuthenticate(message string) error {
         return fmt.Errorf("Reading cookie file: %s", err)
     }
 
+    //Parse authentication challenge
     lineStr := strings.TrimSpace(message)
     respStr := strings.TrimPrefix(lineStr, "250 AUTHCHALLENGE ")
 
@@ -326,6 +343,8 @@ func (t *TorControl) SafeCookieAuthenticate(message string) error {
     return nil
 }
 
+//Output: Error
+//Function: Password authenticate
 func (t *TorControl) PasswordAuthenticate() error {
 
     //Reading password file
@@ -336,6 +355,7 @@ func (t *TorControl) PasswordAuthenticate() error {
         return fmt.Errorf("Reading password file: %s", err)
     }
 
+    //Send password authenticate request
     passwdStr := string(passwd)
 
     authCmd := fmt.Sprintf("%s \"%s\"\r\n", "AUTHENTICATE", passwdStr)
@@ -350,6 +370,9 @@ func (t *TorControl) PasswordAuthenticate() error {
     return err
 }
 
+//Input: Event
+//Output: Error, Log string prepended with log type
+//Function: Register for event
 func (t *TorControl) StartCollection(event string) (error, string) {
 
     var log string
@@ -395,10 +418,13 @@ func (t *TorControl) StartCollection(event string) (error, string) {
     return nil, log
 }
 
+//Output: Error
+//Function: Unregister events
 func (t *TorControl) StopCollection() error {
 
-    t.has_received_event = false
+    t.has_received_event = false //Set event received flag to false
 
+    //Unregister event
     t.event = ""
 
     err := t.SendCommand("SETEVENTS\r\n")
@@ -427,14 +453,21 @@ func (t *TorControl) StopCollection() error {
     return nil
 }
 
+//Input: Epoch
+//Function: Set read deadline for Tor control connection
+func (t *TorControl) SetTimeOut(epoch time.Time) {
+
+    t.controlConn.SetReadDeadline(epoch) //Set read deadline
+}
+
 //Input: List, Element
 //Output: Boolean output
 //Function: Check if element in list
 func contains(l []string, e string) bool {
 
-    for _, ele := range l {
+    for _, ele := range l { //Iterate over list
 
-        if ele == e {
+        if ele == e { //Check if element present
 
             return true
         }
