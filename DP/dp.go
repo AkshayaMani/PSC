@@ -26,7 +26,7 @@ import (
     "net"
     "os"
     "PSC/DP/dpres"
-    "PSC/goControlTor"
+    "PSC2/goControlTor"
     "PSC/logging"
     "PSC/match"
     "PSC/TS/tsmsg"
@@ -168,7 +168,23 @@ func main() {
 
                 case msg := <- message:
 
-                    event, _, _ := torControl.CommandParse(msg) //Print command
+                    event, _, _, log := torControl.CommandParse(msg) //Print command
+
+                    if log != "" { //If log set
+
+                        if strings.HasPrefix(log, "Warning:") {
+
+                            logging.Warning.Println(strings.TrimPrefix(log, "Warning:"))
+
+                        } else if strings.HasPrefix(log, "Info:") {
+
+                            logging.Info.Println(strings.TrimPrefix(log, "Info:"))
+
+                        } else {
+
+                            checkError(fmt.Errorf("%s is not a valid log", log))
+                        }
+                    }
 
                     if len(event) != 0 {
 
@@ -397,8 +413,24 @@ func torControlPortConnect(control_addr, control_port, passwd_file string) {
         msg, err := torControl.ReceiveCommand() //Receive command
         checkError(err)
 
-        _, state, err1 := torControl.CommandParse(msg) //Print command
+        _, state, err1, log := torControl.CommandParse(msg) //Print command
         checkError(err1)
+
+        if log != "" { //If log set
+
+            if strings.HasPrefix(log, "Warning:") {
+
+                logging.Warning.Println(strings.TrimPrefix(log, "Warning:"))
+
+            } else if strings.HasPrefix(log, "Info:") {
+
+                logging.Info.Println(strings.TrimPrefix(log, "Info:"))
+
+            } else {
+
+                checkError(fmt.Errorf("%s is not a valid log", log))
+            }
+        }
 
         if state == "waiting" {
 
@@ -410,9 +442,27 @@ func torControlPortConnect(control_addr, control_port, passwd_file string) {
 //Function: Collect data from Tor using oblivious counters
 func collectData () {
 
-    err := torControl.StartCollection(q_to_e[query])
+    err, log := torControl.StartCollection(q_to_e[query])
     checkError(err)
-    time.Sleep(24 * time.Duration(epoch) * time.Hour)
+
+    if log != "" { //If log set
+
+        if strings.HasPrefix(log, "Warning:") {
+
+            logging.Warning.Println(strings.TrimPrefix(log, "Warning:"))
+
+        } else if strings.HasPrefix(log, "Info:") {
+
+            logging.Info.Println(strings.TrimPrefix(log, "Info:"))
+
+        } else {
+
+            checkError(fmt.Errorf("%s is not a valid log", log))
+        }
+    }
+
+    time.Sleep(24 * time.Duration(epoch) * time.Hour) //Collect data for an epoch
+
     err = torControl.StopCollection()
     checkError(err)
 }

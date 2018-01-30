@@ -98,7 +98,9 @@ func (t *TorControl) SendCommand(command string) error {
 }
 
 
-func (t *TorControl) CommandParse(message string) ([]string, string, error) {
+func (t *TorControl) CommandParse(message string) ([]string, string, error, string) {
+
+    var log string
 
     if t.state == "protocolinfo" {
 
@@ -117,7 +119,7 @@ func (t *TorControl) CommandParse(message string) ([]string, string, error) {
 
             if contains(t.auth_methods, "NULL") { //Warn about security
 
-                fmt.Println("Your Tor control port has no authentication. Please configure CookieAuthentication or HashedControlPassword.")
+                log = "Warning:" + "Your Tor control port has no authentication. Please configure CookieAuthentication or HashedControlPassword." //Prepend with log type
             }
 
             if len(cookie_file) == 2 { //If cookie file is present
@@ -131,13 +133,13 @@ func (t *TorControl) CommandParse(message string) ([]string, string, error) {
 
         } else if message == "250 OK" {
 
-            if contains(t.auth_methods, "SAFECOOKIE") && t.cookie_file != ""  { 
+            if contains(t.auth_methods, "SAFECOOKIE") && t.cookie_file != ""  {
 
                 err := t.SafeCookieAuthChallenge()
 
                 if err != nil {
 
-                    return nil, "", err
+                    return nil, "", err, log
                 }
 
                 t.state = "authchallenge"
@@ -148,32 +150,32 @@ func (t *TorControl) CommandParse(message string) ([]string, string, error) {
 
                 if err != nil {
 
-                    return nil, "", err
+                    return nil, "", err, log
                 }
 
                 t.state = "authenticating"
 
             } else if contains(t.auth_methods, "NULL") {
 
-                fmt.Println("Authenticating with NULL method")
+                log = "Info:" + "Authenticating with NULL method" //Prepend with log type
 
                 err := t.SendCommand("AUTHENTICATE\r\n")
 
                 if err != nil {
 
-                    return nil, "", err
+                    return nil, "", err, log
                 }
 
                 t.state = "authenticating"
 
             } else {
 
-                return nil, "", fmt.Errorf("Authentication methods not implemented")
+                return nil, "", fmt.Errorf("Authentication methods not implemented"), log
             }
 
         } else {
 
-            return nil, "", fmt.Errorf("%s", message)
+            return nil, "", fmt.Errorf("%s", message), log
         }
 
     } else if t.state == "authchallenge" && strings.HasPrefix(message, "250 AUTHCHALLENGE SERVERHASH=") {
@@ -182,9 +184,7 @@ func (t *TorControl) CommandParse(message string) ([]string, string, error) {
 
         if err != nil {
 
-            fmt.Println(err)
-
-            return nil, "", err
+            return nil, "", err, log
         }
 
         t.state = "authenticating"
@@ -195,7 +195,7 @@ func (t *TorControl) CommandParse(message string) ([]string, string, error) {
 
     } else if t.state == "waiting" && strings.HasPrefix(message, "2") {
 
-        fmt.Println("OK response")
+        log = "Info:" + "OK response" //Prepend with log type
 
     } else if t.state == "processing" && strings.HasPrefix(message, "650 PRIVCOUNT_") {
 
@@ -204,19 +204,19 @@ func (t *TorControl) CommandParse(message string) ([]string, string, error) {
 
         if parts[1] != t.event {
 
-            fmt.Println("Unwanted event type", parts[1])
+            log = "Info:" + "Unwanted event type" + parts[1] //Prepend with log type
 
         } else if len(parts) <= 2 {
 
-            fmt.Println("Event with no data", message)
+            log = "Info:" + "Event with no data" + message //Prepend with log type
 
         } else {
 
-            return parts[1:], t.state, nil
+            return parts[1:], t.state, nil, log
         }
     }
 
-    return nil, t.state, nil
+    return nil, t.state, nil, log
 }
 
 func (t *TorControl) SafeCookieAuthChallenge() error {
@@ -350,11 +350,13 @@ func (t *TorControl) PasswordAuthenticate() error {
     return err
 }
 
-func (t *TorControl) StartCollection(event string) error {
+func (t *TorControl) StartCollection(event string) (error, string) {
+
+    var log string
 
     if t.has_received_event == true {
 
-        fmt.Println("StartCollection called multiple times without StopCollection")
+        log = "Warning:" + "StartCollection called multiple times without StopCollection" //Prepend with log type
         t.has_received_event = false
     }
 
@@ -366,31 +368,31 @@ func (t *TorControl) StartCollection(event string) error {
 
         if err != nil {
 
-            return err
+            return err, log
         }
 
         err = t.SendCommand("SETCONF EnablePrivCount=1\r\n")
 
         if err != nil {
 
-            return err
+            return err, log
         }
 
         err = t.SendCommand("SETEVENTS " + t.event + "\r\n")
 
         if err != nil {
 
-            return err
+            return err, log
         }
 
         t.state = "processing"
 
     } else {
 
-        fmt.Println("Not enabling event")
+        log = "Info:" + "Not enabling event" //Prepend with log type
     }
 
-    return nil
+    return nil, log
 }
 
 func (t *TorControl) StopCollection() error {
