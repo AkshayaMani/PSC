@@ -80,7 +80,7 @@ func main() {
 
     logging.LogToFile("logs/Connection"+time.Now().Local().Format("2006-01-02")+"_"+time.Now().Local().Format("15:04:05"))
 
-    dp_ip, control_addr, control_port, passwd_file, tsinfo_file := parseCommandline(os.Args) //Parse DP common name & IP, Tor control address & port no., hashed password file path, and TS information file path
+    control_addr, control_port, passwd_file, tsinfo_file := parseCommandline(os.Args) //Parse DP common name & IP, Tor control address & port no., hashed password file path, and TS information file path
 
     //Assign TS information
     file, err := os.Open(tsinfo_file)
@@ -132,7 +132,7 @@ func main() {
 
         //Listen to the TCP port
         var err error
-        ln, err = net.Listen("tcp", dp_ip+":7100")
+        ln, err = net.Listen("tcp", ":7100")
         checkError(err)
 
         logging.LogToFile("logs/"+dp_cname+time.Now().Local().Format("2006-01-02")+"_"+time.Now().Local().Format("15:04:05"))
@@ -583,47 +583,29 @@ func incrementCounter(event string) {
 //Input: Command-line Arguments
 //Output: DP IP, Tor control address, Tor control port, Tor control hashed password file path, TS information file path
 //Function: Parse Command-line Arguments
-func parseCommandline(arg []string) (string, string, string, string, string) {
+func parseCommandline(arg []string) (string, string, string, string) {
 
-    var dp_ip string //DP IP
-    var e_flag = false //Exit flag
     var control_addr string //Tor control address
     var control_port string //Tor control port
     var passwd_file string //Tor control hashed password file path
     var tsinfo_file string //TS information file path
 
     flag.StringVar(&dp_cname, "d", "", "DP common name (required)")
-    flag.StringVar(&dp_ip, "i", "", "DP IP (required)")
     flag.StringVar(&control_addr, "ca", "127.0.0.1", "Tor control port listen address")
     flag.StringVar(&control_port, "cp", "9051", "Tor control port")
     flag.StringVar(&passwd_file, "pf", "control_password.txt", "Tor control hashed password file path")
     flag.StringVar(&tsinfo_file, "t", "ts.info", "TS information file path")
     flag.Parse()
 
-    if dp_cname == "" || dp_ip == "" {
+    if dp_cname == "" {
 
         logging.Error.Println("Argument required:")
-        e_flag = true //Set exit flag
-
-        if dp_cname == "" {
-
-            logging.Error.Println("   -d string")
-            logging.Error.Println("      DP common name (Required)")
-        }
-
-        if dp_ip == "" {
-
-            logging.Error.Println("   -i string")
-            logging.Error.Println("      DP IP (Required)")
-        }
-    }
-
-    if e_flag == true {//If exit flag set
-
+        logging.Error.Println("   -d string")
+        logging.Error.Println("      DP common name (Required)")
         os.Exit(0) //Exit
     }
 
-    return dp_ip, control_addr, control_port, passwd_file, tsinfo_file
+    return control_addr, control_port, passwd_file, tsinfo_file
 }
 
 //Function: Initialize variables

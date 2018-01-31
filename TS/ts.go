@@ -62,7 +62,7 @@ func main() {
 
     logging.LogToFile("logs/Connection"+time.Now().Local().Format("2006-01-02")+"_"+time.Now().Local().Format("15:04:05"))
 
-    ts_ip, config_file := parseCommandline(os.Args) //Parse TS common name & IP and configuration file path
+    config_file := parseCommandline(os.Args) //Parse TS common name & IP and configuration file path
 
     logging.Info.Println("Parsed command-line arguments")
 
@@ -81,7 +81,7 @@ func main() {
 
         //Listen to the TCP port
         var err error
-        ln, err = net.Listen("tcp", ts_ip+":5100")
+        ln, err = net.Listen("tcp", ":5100")
         checkError(err)
 
         logging.LogToFile("logs/"+ts_cname+time.Now().Local().Format("2006-01-02")+"_"+time.Now().Local().Format("15:04:05"))
@@ -611,43 +611,26 @@ func handleClients(clientconn chan net.Conn, com_name string) {
 //Input: Command-line arguments
 //Output: TS IP, Configuration file path
 //Function: Parse Command-line arguments
-func parseCommandline(arg []string) (string, string) {
+func parseCommandline(arg []string) (string) {
 
-    var ts_ip string //TS IP
     var config_file string //Config file path
-    var e_flag = false //Exit flag
 
     flag.StringVar(&ts_cname, "t", "", "TS common name (required)")
-    flag.StringVar(&ts_ip, "i", "", "TS IP (required)")
     flag.StringVar(&config_file, "c", "config/config.params", "Config file path")
     flag.IntVar(&no_Expts, "e", 1, "No. of experiments")
 
     flag.Parse()
 
-    if ts_cname == "" || ts_ip == "" {
+    if ts_cname == "" {
 
         logging.Error.Println("Argument required:")
-        e_flag = true //Set exit flag
-
-        if ts_cname == "" {
-
-            logging.Error.Println("   -c string")
-            logging.Error.Println("	 TS common name (Required)")
-        }
-
-        if ts_ip == "" {
-
-            logging.Error.Println("   -i string")
-            logging.Error.Println("	 TS IP (Required)")
-        }
-    }
-
-    if e_flag == true {//If exit flag set
+        logging.Error.Println("   -c string")
+        logging.Error.Println("	 TS common name (Required)")
 
         os.Exit(0) //Exit
     }
 
-    return ts_ip, config_file
+    return config_file
 }
 
 //Input: Configuration file path

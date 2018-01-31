@@ -104,7 +104,7 @@ func main() {
 
     logging.LogToFile("logs/Connection"+time.Now().Local().Format("2006-01-02")+"_"+time.Now().Local().Format("15:04:05"))
 
-    cp_ip, tsinfo_file := parseCommandline(os.Args) //Parse CP common name & IP and TS information file path
+    tsinfo_file := parseCommandline(os.Args) //Parse CP common name & IP and TS information file path
 
     //Assign TS information
     file, err := os.Open(tsinfo_file)
@@ -153,7 +153,7 @@ func main() {
 
         //Listen to the TCP port
         var err error
-        ln, err = net.Listen("tcp", cp_ip+":6100")
+        ln, err = net.Listen("tcp", ":6100")
         checkError(err)
 
         logging.LogToFile("logs/"+cp_cname+time.Now().Local().Format("2006-01-02")+"_"+time.Now().Local().Format("15:04:05"))
@@ -1298,41 +1298,24 @@ func broadcastCPData() {
 //Input: Command-line Arguments
 //Output: CP IP, TS information file path
 //Function: Parse Command-line Arguments
-func parseCommandline(arg []string) (string, string){
+func parseCommandline(arg []string) string {
 
-    var cp_ip string //CP IP
-    var e_flag = false //Exit flag
     var tsinfo_file string //TS information file path
 
     flag.StringVar(&cp_cname, "c", "", "CP common name (required)")
-    flag.StringVar(&cp_ip, "i", "", "CP IP (required)")
     flag.StringVar(&tsinfo_file, "t", "ts.info", "TS information file path")
     flag.Parse()
 
-    if cp_cname == "" || cp_ip == "" {
+    if cp_cname == "" {
 
         logging.Error.Println("Argument required:")
-        e_flag = true //Set exit flag
-
-        if cp_cname == "" {
-
-            logging.Error.Println("   -c string")
-            logging.Error.Println("      CP common name (Required)")
-        }
-
-        if cp_ip == "" {
-
-            logging.Error.Println("   -i string")
-            logging.Error.Println("	 CP IP (Required)")
-        }
-    }
-
-    if e_flag == true {//If exit flag set
+        logging.Error.Println("   -c string")
+        logging.Error.Println("      CP common name (Required)")
 
         os.Exit(0) //Exit
     }
 
-    return cp_ip, tsinfo_file
+    return tsinfo_file
 }
 
 
