@@ -28,7 +28,7 @@ You can use PSC/keypair.sh to generate public key pairs for any CP(s), DP(s), or
 
 Refer CAInstructions.markdown for detailed step by step instruction. 
 
-PSC uses the common name in the certificate to uniquely identify a node. So, forward the <common_name> and <ip> of the CP(s) and DP(s) to the TS.
+PSC uses the common name in the certificate to uniquely identify a node. So, forward the <common_name> and <hostname/ip> of the CP(s) and DP(s) to the TS.
 
 ## Tally Server
 
@@ -36,7 +36,7 @@ PSC uses the common name in the certificate to uniquely identify a node. So, for
 
 #### Listen Address
 
-Choose an IP address that is accessible on the Internet on port 5100. Forward the <common_name> and <ip> of the TS to CP(s) and DP(s).
+Choose an IP address that is accessible on the Internet on port 5100. Forward the <common_name> and <hostname/ip> of the TS to CP(s) and DP(s). Receive <common_name> and <hostname/ip> of all CP(s) and DP(s).
 
 Set the PSC parameters in PSC/TS/config/Gen_Config.go:
 
@@ -44,8 +44,8 @@ Set the PSC parameters in PSC/TS/config/Gen_Config.go:
     const no_CPs = 3 //No.of CPs
     const no_DPs = 1 //No. of DPs
     const b = 2000 //Hash table size
-    var cp_hname = []string{"CP1", "CP2", "CP3"} //CP hostnames
-    var dp_hname = []string{"DP1"}//, "DP2", "DP3", "DP4", "DP5"} //DP hostnames
+    var cp_hname = []string{"CP1", "CP2", "CP3"} //CP common names
+    var dp_hname = []string{"DP1"}//, "DP2", "DP3", "DP4", "DP5"} //DP common names
     var cp_ips = []string{"10.176.5.52", "10.176.5.53", "10.176.5.54"} //CP IPs
     var dp_ips = []string{"10.176.5.20"} //{"10.176.5.16", "10.176.5.17", "10.176.5.18", "10.176.5.19", "10.176.5.20"} //DP IPs
     var epoch = 1 //Epoch for data collection
@@ -57,7 +57,7 @@ Set the PSC parameters in PSC/TS/config/Gen_Config.go:
 Be careful while collecting and releasing PSC results: the configured epsilon and delta must protect a typical user's activity over a long enough period. And the collection period must be long enough to aggregate usage from many users (we use multiple days).
 
 PSC is not designed for automated collection and results release: a long enough series of results can identify the activity of a single user.
-
+Choose an IP address that is accessible on the Internet on port 5100. Forward the 
 After configuring parameters, run Gen_Config.go:
 
 ```
@@ -71,7 +71,7 @@ Then run PSC in Tally Server mode:
 
 ```
     cd PSC/TS/
-    go run ts.go -t "<TS_common_name>" -i "<TS_IP>"
+    go run ts.go -t "<TS_common_name>"
 ```
 
 ##### Optional arguments:
@@ -82,13 +82,26 @@ Then run PSC in Tally Server mode:
 
 ## Computation Parties
 
+### Configuration
+
+#### Listen Address
+
+Choose an IP address that is accessible on the Internet on port 6100. Forward the <common_name> and <hostname/ip> of the CP to TS. Receive <common_name> and <hostname/ip> of the TS.
+
+Set the TS information in PSC/CP/ts.info:
+
+```
+    IP <ts_hostname/ip>
+    CN <ts_common_name>
+```
+
 ### PSC
 
 Run PSC in Computation Party mode:
 
 ```
     cd PSC/CP/
-    go run cp.go -c "<CP_common_name>" -i "<CP_IP>"
+    go run cp.go -c "<CP_common_name>"
 ```
 
 ## Data Parties
@@ -96,6 +109,17 @@ Run PSC in Computation Party mode:
 You need one PSC Data Party per tor relay.
 
 ### Configuration
+
+#### Listen Address
+
+Choose an IP address that is accessible on the Internet on port 7100. Forward the <common_name> and <hostname/ip> of the DP to TS. Receive <common_name> and <hostname/ip> of the TS.
+
+Set the TS information in PSC/DP/ts.info:
+
+```
+    IP <ts_hostname/ip>
+    CN <ts_common_name>
+```
 
 #### Relay Creation
 
@@ -176,7 +200,7 @@ Then run PSC in Data Party mode:
 
 ```
     cd PSC/DP/
-    go run ts.go -d "<DP_common_name>" -i "<DP_IP>"
+    go run ts.go -d "<DP_common_name>"
 ```
 
 ##### Optional arguments:
