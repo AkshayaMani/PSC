@@ -74,31 +74,31 @@ Add the root certificate and key to the destined folders:
 Next create a user key and a certificate signing request in one step: (Use a random passphrase)
 
 ```
-    sudo openssl req -newkey rsa:4096 -keyout <DP_common_name>.key -out <DP_common_name>.csr -config openssl.cnf -days 3650
+    sudo openssl req -newkey rsa:4096 -keyout <usr_common_name>.key -out <usr_common_name>.csr -config openssl.cnf -days 3650
 ```
 
 Create the insecure key, the one without a passphrase, and interchange the key names:
 
 ```
-    openssl rsa -in <DP_common_name>.key -out <DP_common_name>.key.insecure
-    sudo mv <DP_common_name>.key.insecure <DP_common_name>.key
+    openssl rsa -in <usr_common_name>.key -out <usr_common_name>.key.insecure
+    sudo mv <usr_common_name>.key.insecure <usr_common_name>.key
 ```
 
 Using the CSR, generate a certificate signed by the CA:
 
 ```
-    sudo openssl ca -in <DP_common_name>.csr -config openssl.cnf
+    sudo openssl ca -in <usr_common_name>.csr -config openssl.cnf
 ```
  
 Rename certificate file:
 
 ```
-    sudo mv PSC/<usr>/certs/<index>.pem PSC/<usr>/certs/<DP_common_name>.cert
+    sudo mv PSC/<usr>/certs/<index>.pem PSC/<usr>/certs/<usr_common_name>.cert
 ```
 
 Add the user certificate and key in the destined folders:
 
 ```
-    sudo mv <DP_common_name>.csr PSC/<usr>/csr/
-    sudo mv <DP_common_name>.key PSC/<usr>/private/
+    sudo mv <usr_common_name>.csr PSC/<usr>/csr/
+    sudo mv <usr_common_name>.key PSC/<usr>/private/
 ```
