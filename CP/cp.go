@@ -61,11 +61,11 @@ var b int64 //Hash table size
 var n int64 //No. of noise vectors
 
 var ts_cname string //TS common name
-var ts_ip string //TS IP
+var ts_addr string //TS address
 var cp_cnames []string //CP common names
 var dp_cnames []string //DP common names
-var cp_ips []string //CP IPs
-var dp_ips []string //DP IPs
+var cp_addr []string //CP addresses
+var dp_addr []string //DP addresses
 var cp_cname string //CP common name
 var cp_no int32 //CP number
 var no_dp_res int32 //No. of DPs Responded so far
@@ -104,7 +104,7 @@ func main() {
 
     logging.LogToFile("logs/Connection"+time.Now().Local().Format("2006-01-02")+"_"+time.Now().Local().Format("15:04:05"))
 
-    tsinfo_file := parseCommandline(os.Args) //Parse CP common name & IP and TS information file path
+    cp_port, tsinfo_file := parseCommandline(os.Args) //Parse CP common name & port, and TS information file path
 
     //Assign TS information
     file, err := os.Open(tsinfo_file)
@@ -118,9 +118,11 @@ func main() {
         no_of_lines += 1
         t := scanner.Text()
 
-        if no_of_lines <= 2 && strings.HasPrefix(t, "IP ") {
+        if no_of_lines <= 2 && strings.HasPrefix(t, "Addr ") {
 
-            ts_ip = strings.TrimPrefix(t, "IP ") //Assign TS IP
+            ts_addr = strings.TrimPrefix(t, "Addr ") //Assign TS address
+
+            ts_ip := strings.Split(ts_addr, ":")[0]
 
             if net.ParseIP(ts_ip) == nil {
 
@@ -153,7 +155,7 @@ func main() {
 
         //Listen to the TCP port
         var err error
-        ln, err = net.Listen("tcp", ":6100")
+        ln, err = net.Listen("tcp", ":"+cp_port)
         checkError(err)
 
         logging.LogToFile("logs/"+cp_cname+time.Now().Local().Format("2006-01-02")+"_"+time.Now().Local().Format("15:04:05"))
@@ -302,7 +304,7 @@ func sendTSSignal(sno uint32) {
     sigb, _ := proto.Marshal(sig)
 
     //Send signal to TS
-    sendDataToDest(sigb, ts_cname, ts_ip+":5100")
+    sendDataToDest(sigb, ts_cname, ts_addr)
 }
 
 //Input: DP socket channel
@@ -847,7 +849,7 @@ func handleCPs(cpconn chan net.Conn, com_name string) {
                         resultb, _ := proto.Marshal(result)
 
                         //Send signal to TS
-                        sendDataToDest(resultb, ts_cname, ts_ip+":5100")
+                        sendDataToDest(resultb, ts_cname, ts_addr)
                     }
 
                     cp_bcast = 0 //Set CP0 as Broadcasting CP
@@ -906,7 +908,7 @@ func broadcastCPData() {
 
                 if i != cp_no {
 
-                    sendDataToDest(resp1, cp_cnames[i], cp_ips[i]+":6100")
+                    sendDataToDest(resp1, cp_cnames[i], cp_addr[i])
                 }
             }
 
@@ -958,7 +960,7 @@ func broadcastCPData() {
 
                 if i != cp_no {
 
-                    sendDataToDest(resp1, cp_cnames[i], cp_ips[i]+":6100")
+                    sendDataToDest(resp1, cp_cnames[i], cp_addr[i])
                 }
             }
 
@@ -1277,7 +1279,7 @@ func broadcastCPData() {
                     resultb, _ := proto.Marshal(result)
 
                     //Send signal to TS
-                    sendDataToDest(resultb, ts_cname, ts_ip+":5100")
+                    sendDataToDest(resultb, ts_cname, ts_addr)
                 }
 
                 cp_bcast = 0 //Set CP0 as Broadcasting CP
@@ -1296,28 +1298,43 @@ func broadcastCPData() {
 }
 
 //Input: Command-line Arguments
-//Output: CP IP, TS information file path
+//Output: CP port number, TS information file path
 //Function: Parse Command-line Arguments
-func parseCommandline(arg []string) string {
+func parseCommandline(arg []string) (string, string) {
 
     var tsinfo_file string //TS information file path
+    var cp_port string //CP port no.
+    var e_flag = false //Exit flag
 
     flag.StringVar(&cp_cname, "c", "", "CP common name (required)")
+    flag.StringVar(&cp_port, "p", "", "CP port number (required)")
     flag.StringVar(&tsinfo_file, "t", "ts.info", "TS information file path")
     flag.Parse()
 
-    if cp_cname == "" {
+    if cp_cname == "" || cp_port == "" {
 
         logging.Error.Println("Argument required:")
-        logging.Error.Println("   -c string")
-        logging.Error.Println("      CP common name (Required)")
+        e_flag = true //Set exit flag
+
+        if cp_port == "" {
+
+            logging.Error.Println("   -p string")
+            logging.Error.Println("      CP port number (Required)")
+        }
+
+        if cp_cname == "" {
+
+            logging.Error.Println("   -c string")
+            logging.Error.Println("      CP common name (Required)")
+        }
+    }
+    if e_flag == true {//If exit flag set
 
         os.Exit(0) //Exit
     }
 
-    return tsinfo_file
+    return cp_port, tsinfo_file
 }
-
 
 //Function: Initialize variables
 func initValues() {
@@ -1331,8 +1348,8 @@ func initValues() {
 
     cp_cnames = nil //CP common names
     dp_cnames = nil //DP common names
-    cp_ips = nil //CP IPs
-    dp_ips = nil //DP IPs
+    cp_addr = nil //CP addresses
+    dp_addr = nil //DP addresses
     cp_no = 0 //CP number
     no_dp_res = 0 //No. of DPs responded so far
     no_cp_res = 0 //No. of CPs broadcasted/re-broadcasted
@@ -1377,17 +1394,17 @@ func assignConfig(config *TSmsg.Config) {
 
     no_CPs = *config.Ncps //No. of CPs
     cp_cnames = make([]string, no_CPs) //CP common names
-    cp_ips = make([]string, no_CPs) //CP IPs
+    cp_addr = make([]string, no_CPs) //CP addresses
 
     copy(cp_cnames[:], config.CPcnames) //Assign CP common names
-    copy(cp_ips[:], config.CPips) //Assign CP IPs
+    copy(cp_addr[:], config.CPaddr) //Assign CP addresses
 
     no_DPs = *config.Ndps //No. of DPs
     dp_cnames = make([]string, no_DPs) //DP common names
-    dp_ips = make([]string, no_DPs) //DP IPs
+    dp_addr = make([]string, no_DPs) //DP addresses
 
     copy(dp_cnames[:], config.DPcnames) //Assign DP common names
-    copy(dp_ips[:], config.DPips) //Assign DP IPs
+    copy(dp_addr[:], config.DPaddr) //Assign DP addresses
 
     b = *config.Tsize //Hash table size
 
@@ -1446,7 +1463,7 @@ func assignConfig(config *TSmsg.Config) {
     }
 }
 
-//Input: Data, Destination common name, Destination ip
+//Input: Data, Destination common name, Destination address
 //Function: Send Data to Destination
 func sendDataToDest(data []byte, dst_cname string, dst_addr string) {
 
@@ -1578,7 +1595,7 @@ func broadcastData(step_no uint32, data []byte) {
         //Send to all other CPs
         if i != int(cp_no) {
 
-            sendDataToDest(sign_msg, cp_cnames[i], cp_ips[i]+":6100")
+            sendDataToDest(sign_msg, cp_cnames[i], cp_addr[i])
         }
     }
 }
@@ -1612,7 +1629,7 @@ func sendDataN_1(step_no uint32, src int, data []byte) {
         //Send to other n-1 CPs
         if i != int(cp_no) && i != src {
 
-            sendDataToDest(sign_msg, cp_cnames[i], cp_ips[i]+":6100")
+            sendDataToDest(sign_msg, cp_cnames[i], cp_addr[i])
         }
     }
 }

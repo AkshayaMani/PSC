@@ -45,12 +45,12 @@ var epoch int //Epoch
 var b int64 //Hash table size
 
 var ts_cname string //TS hostname
-var ts_ip string //TS IP
+var ts_addr string //TS address
 var query string //Query
 var cp_cnames []string //CP common names
 var dp_cnames []string //DP common names
-var cp_ips []string //CP IPs
-var dp_ips []string //DP IPs
+var cp_addr []string //CP addresses
+var dp_addr []string //DP addresses
 var dp_cname string //DP common name
 var f_flag bool //Finish Flag
 var step_no uint32 //DP Step Number
@@ -80,7 +80,7 @@ func main() {
 
     logging.LogToFile("logs/Connection"+time.Now().Local().Format("2006-01-02")+"_"+time.Now().Local().Format("15:04:05"))
 
-    control_addr, control_port, passwd_file, tsinfo_file := parseCommandline(os.Args) //Parse DP common name & IP, Tor control address & port no., hashed password file path, and TS information file path
+    dp_port, control_addr, control_port, passwd_file, tsinfo_file := parseCommandline(os.Args) //Parse DP common name & port number, Tor control address & port no., hashed password file path, and TS information file path
 
     //Assign TS information
     file, err := os.Open(tsinfo_file)
@@ -94,9 +94,11 @@ func main() {
         no_of_lines += 1
         t := scanner.Text()
 
-        if no_of_lines <= 2 && strings.HasPrefix(t, "IP ") {
+        if no_of_lines <= 2 && strings.HasPrefix(t, "Addr ") {
 
-            ts_ip = strings.TrimPrefix(t, "IP ") //Assign TS IP
+            ts_addr = strings.TrimPrefix(t, "Addr ") //Assign TS address
+
+            ts_ip := strings.Split(ts_addr, ":")[0]
 
             if net.ParseIP(ts_ip) == nil {
 
@@ -132,7 +134,7 @@ func main() {
 
         //Listen to the TCP port
         var err error
-        ln, err = net.Listen("tcp", ":7100")
+        ln, err = net.Listen("tcp", ":"+dp_port)
         checkError(err)
 
         logging.LogToFile("logs/"+dp_cname+time.Now().Local().Format("2006-01-02")+"_"+time.Now().Local().Format("15:04:05"))
@@ -240,7 +242,7 @@ func sendTSSignal(sno uint32) {
     sigb, _ := proto.Marshal(sig)
 
     //Send signal to TS
-    sendDataToDest(sigb, ts_cname, ts_ip+":5100")
+    sendDataToDest(sigb, ts_cname, ts_addr)
 }
 
 //Input: TS Socket
@@ -317,7 +319,7 @@ func handleTS(conn net.Conn) {
 
                             //Send key to CP
                             logging.Info.Println("Sending symmetric key to CP", i,". Step No.", step_no)
-                            sendDataToDest(resp1, cp_cnames[i], cp_ips[i]+":6100")
+                            sendDataToDest(resp1, cp_cnames[i], cp_addr[i])
 	                }
 
                         k = nil //Forget keys
@@ -365,7 +367,7 @@ func handleTS(conn net.Conn) {
 
                             //Send data shares to CP
                             logging.Info.Println("Sending masked data shares to CP", i,". Step No.", step_no)
-                            sendDataToDest(resp1, cp_cnames[i], cp_ips[i]+":6100")
+                            sendDataToDest(resp1, cp_cnames[i], cp_addr[i])
                         }
                     }
 
@@ -518,7 +520,6 @@ func handle_stream_event(event []string, query string) {
 
     port := event[3] //Remote port
     remote_host := event[8] //Remote host address
-    //remote_ip := event[9] //Resolved remote IP address
     exit_stream_number := event[10] //Circuit exit stream number
 
     stream_circ := "Subsequent" //Set stream as subsequent stream
@@ -581,15 +582,18 @@ func incrementCounter(event string) {
 }
 
 //Input: Command-line Arguments
-//Output: DP IP, Tor control address, Tor control port, Tor control hashed password file path, TS information file path
+//Output: DP port number, Tor control address, Tor control port, Tor control hashed password file path, TS information file path
 //Function: Parse Command-line Arguments
-func parseCommandline(arg []string) (string, string, string, string) {
+func parseCommandline(arg []string) (string, string, string, string, string) {
 
+    var dp_port string //DP port number
+    var e_flag = false //Exit flag
     var control_addr string //Tor control address
     var control_port string //Tor control port
     var passwd_file string //Tor control hashed password file path
     var tsinfo_file string //TS information file path
 
+    flag.StringVar(&dp_port, "p", "", "DP port number (required)")
     flag.StringVar(&dp_cname, "d", "", "DP common name (required)")
     flag.StringVar(&control_addr, "ca", "127.0.0.1", "Tor control port listen address")
     flag.StringVar(&control_port, "cp", "9051", "Tor control port")
@@ -597,15 +601,30 @@ func parseCommandline(arg []string) (string, string, string, string) {
     flag.StringVar(&tsinfo_file, "t", "ts.info", "TS information file path")
     flag.Parse()
 
-    if dp_cname == "" {
+    if dp_cname == "" || dp_port == "" {
 
         logging.Error.Println("Argument required:")
-        logging.Error.Println("   -d string")
-        logging.Error.Println("      DP common name (Required)")
+        e_flag = true //Set exit flag
+
+        if dp_cname == "" {
+
+            logging.Error.Println("   -d string")
+            logging.Error.Println("      DP common name (Required)")
+        }
+
+        if dp_port == "" {
+
+            logging.Error.Println("   -p string")
+            logging.Error.Println("      DP port number (Required)")
+        }
+    }
+
+    if e_flag == true {//If exit flag set
+
         os.Exit(0) //Exit
     }
 
-    return control_addr, control_port, passwd_file, tsinfo_file
+    return dp_port, control_addr, control_port, passwd_file, tsinfo_file
 }
 
 //Function: Initialize variables
@@ -618,8 +637,8 @@ func initValues() {
 
     cp_cnames = nil //CP common names
     dp_cnames = nil //DP common names
-    cp_ips = nil //CP IPs
-    dp_ips = nil //DP IPs
+    cp_addr = nil //CP addresses
+    dp_addr = nil //DP addresses
     f_flag = false //Finish flag
     d_flag = false //Data collection finish flag
     step_no = 0 //DP step no.
@@ -653,17 +672,17 @@ func assignConfig(config *TSmsg.Config) {
 
 
     cp_cnames = make([]string, no_CPs) //CP common names
-    cp_ips = make([]string, no_CPs) //CP IPs
+    cp_addr = make([]string, no_CPs) //CP addresses
 
     copy(cp_cnames[:], config.CPcnames) //Assign CP common names
-    copy(cp_ips[:], config.CPips) //Assign CP IPs
+    copy(cp_addr[:], config.CPaddr) //Assign CP addresses
 
     no_DPs = *config.Ndps //No. of DPs
     dp_cnames = make([]string, no_DPs) //DP common names
-    dp_ips = make([]string, no_DPs) //DP IPs
+    dp_addr = make([]string, no_DPs) //DP addresses
 
     copy(dp_cnames[:], config.DPcnames) //Assign DP common names
-    copy(dp_ips[:], config.DPips) //Assign DP IPs
+    copy(dp_addr[:], config.DPaddr) //Assign DP addresses
 
     b = *config.Tsize //Hash table size
 
