@@ -147,12 +147,14 @@ func main() {
             //Send config to CPs
             for i := 0; i < no_CPs; i++ {
 
+                logging.Info.Println("Sending config to", strings.Split(cp_addr[i], ":")[0])
                 sendDataToDest(configbytes, cp_cnames[i], cp_addr[i])
             }
 
             //Send config to DPs
             for i := 0; i < no_DPs; i++ {
 
+                logging.Info.Println("Sending config to", strings.Split(dp_addr[i], ":")[0])
                 sendDataToDest(configbytes, dp_cnames[i], dp_addr[i])
             }
 
