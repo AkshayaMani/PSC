@@ -96,13 +96,20 @@ func main() {
 
         if no_of_lines <= 2 && strings.HasPrefix(t, "Addr ") {
 
-            ts_addr = strings.TrimPrefix(t, "Addr ") //Assign TS address
+            ts_addrport = strings.TrimPrefix(t, "Addr ") //Assign TS address
 
-            ts_ip := strings.Split(ts_addr, ":")[0]
+            ts_addr := strings.Split(ts_addrport, ":")[0]
 
-            if net.ParseIP(ts_ip) == nil {
+            ts_port, err := strconv.ParseUint(strings.Split(ts_addrport, ":")[1$
 
-                checkError(fmt.Errorf("%s is not a valid IP", ts_ip))
+            if strings.Contains(ts_addr, " ") {
+
+                checkError(fmt.Errorf("%s is not a valid address", ts_addr))
+            }
+
+            if err != nil {
+
+                checkError(fmt.Errorf("%s is not a valid port", ts_port))
             }
 
         } else if no_of_lines <= 2 && strings.HasPrefix(t, "CN ") {
