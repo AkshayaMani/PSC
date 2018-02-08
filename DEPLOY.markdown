@@ -26,7 +26,7 @@ You can use PSC/keypair.sh to generate public key pairs for any CP(s), DP(s), or
     <usr_common_name>   Common name
 ```
 
-Refer CAInstructions.markdown for detailed step by step instruction. 
+Enter <usr_common_name> when prompted and use a random passphrase. Refer CAInstructions.markdown for detailed step by step instruction. 
 
 PSC uses the common name in the certificate to uniquely identify a node. So, forward the <common_name> and <hostname/ip>:<port> of the CP(s) and DP(s) to the TS.
 

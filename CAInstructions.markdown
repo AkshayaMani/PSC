@@ -39,7 +39,7 @@ Also, add default values for country, province, organization, etc.:
     1.organizationName_default      = Computer Science Department
     organizationalUnitName          = Organizational Unit Name (eg, section)
     organizationalUnitName_default  = Private Set-Union Cardinality
-    commonName                      = Common Name (eg, YOUR name)
+    commonName                      = Common Name (i.e. <usr_common_name>)
     commonName_max                  = 64
     emailAddress                    = Email Address
     emailAddress_max                = 40
@@ -71,7 +71,7 @@ Add the root certificate and key to the destined folders:
     sudo mv <ca_name>.cert PSC/CA/certs/
 ```
 
-Next create a user key and a certificate signing request in one step: (Use a random passphrase)
+Next create a user key and a certificate signing request in one step: (Enter <usr_common_name> when prompted and use a random passphrase)
 
 ```
     sudo openssl req -newkey rsa:4096 -keyout <usr_common_name>.key -out <usr_common_name>.csr -config openssl.cnf -days 3650
