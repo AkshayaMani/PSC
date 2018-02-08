@@ -12,7 +12,6 @@ import (
     "fmt"
     "github.com/golang/protobuf/proto"
     "io/ioutil"
-    "math"
     "PSC/TS/tsmsg"
 )
 
@@ -26,17 +25,20 @@ func main() {
     var cp_addr = []string{"10.176.5.24:6100", "10.176.5.25:6100"} //CP addresses
     var dp_addr = []string{"10.176.5.22:7100", "10.176.5.23:7100"} //DP addresses
     var epoch = 1 //Epoch for data collection
-    var epsilon = 0.3 //Epsilon
-    var delta = math.Pow(10, -13) //Delta
-    //var query = "ExitFirstLevelDomainWebInitialStream" //Query
-    var query = "ExitFirstLevelDomainAlexa1MWebInitialStream" //Query
+    //var epsilon = 0.3 //Epsilon
+    //var delta = math.Pow(10, -13) //Delta
+    var query = "ExitFirstLevelDomainWebInitialStream" //Query
+    //var query = "ExitFirstLevelDomainAlexa1MWebInitialStream" //Query
+
+    //Compute noise
+    //n := int64(math.Floor((math.Log(1 / delta) * 12.5 * math.Pow(sensitivity, 2))/math.Pow(epsilon, 2))) + 1 //No. of Noise vectors
+    n := int64(4934908)
 
     //Assign PSC configuration parameters
     config := new(TSmsg.Config)
     config.SNo  = proto.Int32(int32(0))
     config.Epoch = proto.Int32(int32(epoch))
-    config.Epsilon = proto.Float32(float32(epsilon))
-    config.Delta = proto.Float32(float32(delta))
+    config.Noise = proto.Int64(n)
     config.Ncps = proto.Int32(int32(no_CPs))
     config.CPcnames = make([]string, no_CPs)
     config.CPaddr = make([]string, no_CPs)
@@ -70,8 +72,7 @@ func main() {
     //Display config file
     fmt.Println("Session No.:", *config1.SNo)
     fmt.Println("Epoch:", *config1.Epoch)
-    fmt.Println("Epsilon:", *config1.Epsilon)
-    fmt.Println("Delta:", *config1.Delta)
+    fmt.Println("Noise:", *config1.Noise)
     fmt.Println("No. of CPs:", *config1.Ncps)
     fmt.Println("CP common names:", config1.CPcnames)
     fmt.Println("CP IPs:", config1.CPaddr)

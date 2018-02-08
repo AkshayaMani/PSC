@@ -32,8 +32,7 @@ var no_CPs int //No.of CPs
 var no_DPs int //No. of DPs
 var b int64 //Hash table size
 var no_Expts int //No. of measurements
-var epsilon float32 //Epsilon
-var delta float32 //Delta
+var noise int64 //No. of noise bins
 var epoch int //Epoch
 var query string //Query
 var cp_cnames []string //CP common names
@@ -122,8 +121,7 @@ func main() {
             config := new(TSmsg.Config)
             config.SNo = proto.Int32(int32(ts_s_no))
             config.Epoch = proto.Int32(int32(epoch))
-            config.Epsilon = proto.Float32(float32(epsilon))
-            config.Delta = proto.Float32(float32(delta))
+            config.Noise = proto.Int64(noise)
             config.Ncps = proto.Int32(int32(no_CPs))
             config.CPcnames = make([]string, no_CPs)
             config.CPaddr = make([]string, no_CPs)
@@ -652,8 +650,7 @@ func assignConfig(config_file string) {
     no_DPs = int(*config.Ndps) //No. of DPs
     epoch = int(*config.Epoch) //Epoch
     query = *config.Query //Query
-    epsilon = *config.Epsilon //Epsilon
-    delta = *config.Delta //Delta
+    noise = *config.Noise //No. of noise bins
     b = *config.Tsize //Hash table size
     cp_cnames  = make([]string, no_CPs) //CP common names
     cp_addr = make([]string, no_CPs) //CP addresses

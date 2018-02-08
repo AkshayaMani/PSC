@@ -27,7 +27,6 @@ import (
     "github.com/golang/protobuf/proto"
     "io"
     "io/ioutil"
-    "math"
     "math/rand"
     "net"
     "os"
@@ -58,7 +57,7 @@ var pseudorand abstract.Cipher //For Randomness
 var no_CPs int32 //No.of CPs
 var no_DPs int32 //No. of DPs
 var b int64 //Hash table size
-var n int64 //No. of noise vectors
+var n int64 //No. of noise bins
 
 var ts_cname string //TS common name
 var ts_addr string //TS address
@@ -1395,9 +1394,7 @@ func initValues() {
 func assignConfig(config *TSmsg.Config) {
 
     ts_s_no = uint32(*config.SNo) //TS session no.
-    epsilon := float64(*config.Epsilon) //Privacy parameter - epsilon
-    delta := float64(*config.Delta) //Privacy parameter - delta
-    n = int64(math.Floor((math.Log(2 / delta) * 64)/math.Pow(epsilon, 2))) + 1 //No. of Noise vectors
+    n = *config.Noise //No. of Noise bins
 
     no_CPs = *config.Ncps //No. of CPs
     cp_cnames = make([]string, no_CPs) //CP common names

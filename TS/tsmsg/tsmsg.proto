@@ -12,16 +12,15 @@ package TSmsg;
 message Config {
   required int32 SNo = 1;
   required int32 Epoch = 2;
-  required float Epsilon = 3;
-  required float Delta = 4; 
-  required int32 Ncps = 5;
-  repeated string CPcnames = 6;
-  repeated string CPaddr = 7;
-  required int32 Ndps = 8;
-  repeated string DPcnames = 9;
-  repeated string DPaddr = 10;
-  required int64 Tsize = 11;
-  required string Query = 12;
+  required int64 Noise = 3;
+  required int32 Ncps = 4;
+  repeated string CPcnames = 5;
+  repeated string CPaddr = 6;
+  required int32 Ndps = 7;
+  repeated string DPcnames = 8;
+  repeated string DPaddr = 9;
+  required int64 Tsize = 10;
+  required string Query = 11;
 }
 
 message Signal {
