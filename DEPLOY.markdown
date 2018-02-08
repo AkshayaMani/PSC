@@ -26,7 +26,7 @@ You can use PSC/keypair.sh to generate public key pairs for any CP(s), DP(s), or
     <usr_common_name>   Common name
 ```
 
-Enter <usr_common_name> when prompted and use a random passphrase. Refer CAInstructions.markdown for detailed step by step instruction. 
+Refer CAInstructions.markdown for detailed step by step instruction. 
 
 PSC uses the common name in the certificate to uniquely identify a node. So, forward the <common_name> and <hostname/ip>:<port> of the CP(s) and DP(s) to the TS.
 
@@ -52,6 +52,13 @@ Set the PSC parameters in PSC/TS/config/Gen_Config.go:
     var epsilon = 0.3 //Epsilon
     var delta = math.Pow(10, -13) //Delta
     var query = "ExitFirstLevelDomainWebInitialStream" //Query
+```
+
+And generate configuration:
+
+```
+    cd PSC/TS/config/
+    go run Gen_Config.go
 ```
 
 Be careful while collecting and releasing PSC results: the configured epsilon and delta must protect a typical user's activity over a long enough period. And the collection period must be long enough to aggregate usage from many users (we use multiple days).
