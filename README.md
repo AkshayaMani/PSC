@@ -36,7 +36,7 @@ See INSTALL.markdown for details.
 To run PSC, simply activate the virtual environment that you created earlier and then run PSC. For example:
 
 ```
-  nv on <goenvironment_name>
+  nv on goenv
   ...
   nv off
 ```

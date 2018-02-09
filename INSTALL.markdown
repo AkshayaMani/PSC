@@ -22,11 +22,11 @@ Restart your terminal.
 
 ### Create an environment <goenvironment_name> with go 1.7 or later
 
-    nv mk <goenvironment_name> --go-prebuilt=1.7.5
+    nv mk goenv --go-prebuilt=1.7.5
 
 ### Activate environment
 
-    nv on <goenvironment_name>
+    nv on goenv
 
 ### Install PSC dependancies
 
@@ -42,7 +42,7 @@ Restart your terminal.
 
 ### Upgrade PSC
 
-    cd $GOPATH/src
+    cd $GOPATH/src/PSC
     git pull
 
 ### Deactivate environment
@@ -53,12 +53,14 @@ Restart your terminal.
 
 A custom compiled PrivCount-patched Tor can be used to run a Data Party.
 
+The most up to date instructions are located here:
+
+https://github.com/privcount/privcount/blob/master/INSTALL.markdown#installing-a-privcount-patched-tor-data-collectors
+
 ### Tor Dependencies
 
     Debian/Ubuntu:  libssl-dev libevent-dev
     Other Linux:    libssl libssl-dev libevent libevent-devel
-
-### Tor Dependencies
 
 #### Linux Sandbox (Optional)
 
