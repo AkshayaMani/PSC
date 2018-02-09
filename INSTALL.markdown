@@ -53,6 +53,10 @@ Restart your terminal.
 
 A custom compiled PrivCount-patched Tor can be used to run a Data Party.
 
+The most up to date instructions are located here:
+
+https://github.com/privcount/privcount/blob/master/INSTALL.markdown#installing-a-privcount-patched-tor-data-collectors
+
 ### Tor Dependencies
 
     Debian/Ubuntu:  libssl-dev libevent-dev

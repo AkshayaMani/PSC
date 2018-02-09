@@ -126,6 +126,10 @@ Set the TS information in PSC/DP/ts.info:
 
 #### Relay Creation
 
+The most up to date instructions are located here:
+
+https://github.com/privcount/privcount/blob/master/DEPLOY.markdown#data-collectors
+
 If you are setting up your relays for the first time, we recommend you use a
 script to create consistent relay configs. Debian and Ubuntu have:
 
