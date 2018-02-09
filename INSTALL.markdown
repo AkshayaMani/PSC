@@ -42,7 +42,7 @@ Restart your terminal.
 
 ### Upgrade PSC
 
-    cd $GOPATH/src
+    cd $GOPATH/src/PSC
     git pull
 
 ### Deactivate environment
