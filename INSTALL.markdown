@@ -22,11 +22,11 @@ Restart your terminal.
 
 ### Create an environment <goenvironment_name> with go 1.7 or later
 
-    nv mk <goenvironment_name> --go-prebuilt=1.7.5
+    nv mk goenv --go-prebuilt=1.7.5
 
 ### Activate environment
 
-    nv on <goenvironment_name>
+    nv on goenv
 
 ### Install PSC dependancies
 
