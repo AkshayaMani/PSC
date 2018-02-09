@@ -57,6 +57,7 @@ Set the PSC parameters in PSC/TS/config/Gen_Config.go:
 And generate configuration:
 
 ```
+    nv on goenv
     cd PSC/TS/config/
     go run Gen_Config.go
 ```
@@ -65,18 +66,12 @@ Be careful while collecting and releasing PSC results: the configured epsilon an
 
 PSC is not designed for automated collection and results release: a long enough series of results can identify the activity of a single user.
 
-After configuring parameters, run Gen_Config.go:
-
-```
-    cd PSC/TS/config
-    go run Gen_Config.go
-```
-
 #### PSC      
 
 Then run PSC in Tally Server mode:
 
 ```
+    nv on goenv
     cd PSC/TS/
     go run ts.go -t "<TS_common_name>" -p "<TS_port>"
 ```
@@ -107,6 +102,7 @@ Set the TS information in PSC/CP/ts.info:
 Run PSC in Computation Party mode:
 
 ```
+    nv on goenv
     cd PSC/CP/
     go run cp.go -c "<CP_common_name>" -p "<CP_port>"
 ```
@@ -206,6 +202,7 @@ Start tor relay manually:
 Then run PSC in Data Party mode:
 
 ```
+    nv on goenv
     cd PSC/DP/
     go run ts.go -d "<DP_common_name>" -p "<DP_port>"
 ```
