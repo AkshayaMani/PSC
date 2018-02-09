@@ -58,8 +58,6 @@ A custom compiled PrivCount-patched Tor can be used to run a Data Party.
     Debian/Ubuntu:  libssl-dev libevent-dev
     Other Linux:    libssl libssl-dev libevent libevent-devel
 
-### Tor Dependencies
-
 #### Linux Sandbox (Optional)
 
     Debian/Ubuntu:  libseccomp-dev
