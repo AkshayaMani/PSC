@@ -1,13 +1,28 @@
-# CA Key generation (OpenSSL 1.0.2g)
+# CA Instructions (OpenSSL 1.0.2g)
 
-The CA needs a few files to operate: one to keep track of the last serial number used by the CA (each certificate must have a unique serial number) and another file to record which certificates have been issued:
+## CA files
+
+### Serial file
+
+Create a file that keeps track of the last serial number used by the CA (each certificate must have a unique serial number):
 
 ```
-    sudo sh -c "echo '01' > PSC/CA/serial"
-    sudo touch PSC/CA/index.txt
+    sh -c "echo '01' > PSC/CA/serial"
 ```
 
-The third file is a CA configuration file (refer PSC/openssl.cnf). Though not strictly necessary, it is very convenient when issuing multiple certificates. Edit openssl.cnf, and change the following fields: Here, directory usr must be directory TS, CP, or DP depending on the keys you want to generate.
+### Index file
+
+Create an index file that keeps record of all certificates issued:
+
+```
+    touch PSC/CA/index.txt
+```
+
+### Configuration file
+
+Create a CA configuration file (refer PSC/openssl.cnf). This is optional, but is very convenient while issuing multiple certificates. 
+
+Edit openssl.cnf, and change the following fields: (Here, directory \<usr\> must be directory TS, CP, or DP depending on the keys you want to generate.)
 
 ```
     [ CA_default ]
@@ -45,60 +60,64 @@ Also, add default values for country, province, organization, etc.:
     emailAddress_max                = 40
 ```
 
-Generate the root CA key: (Use a random passphrase)
+## CA key
+
+Generate the CA key: (Use a random passphrase)
 
 ```
-    sudo openssl genrsa -aes256 -out <ca_name>.key 4096
+    openssl genrsa -aes256 -out <ca_name>.key 4096
 ```
 
-Create the insecure key, the one without a passphrase, and shuffle the key names:
+Create the insecure key, the one without a passphrase, and interchange the key names:
 
 ```
     openssl rsa -in <ca_name>.key -out <ca_name>.key.insecure
-    sudo mv <ca_name>.key.insecure <ca_name>.key
+    mv <ca_name>.key.insecure <ca_name>.key
 ```
 
 Next, create the self-signed root certificate:
 
 ```
-    sudo openssl req -new -x509 -days 3650 -key <ca_name>.key -out <ca_name>.cert -config <openssl_configuration_file>
+    openssl req -new -x509 -days 3650 -key <ca_name>.key -out <ca_name>.cert -config <openssl_configuration_file>
 ```
 
 Add the root certificate and key to the destined folders:
 
 ```
-    sudo mv <ca_name>.key PSC/CA/private/
-    sudo mv <ca_name>.cert PSC/CA/certs/
+    mv <ca_name>.key PSC/CA/private/
+    mv <ca_name>.cert PSC/CA/certs/
 ```
 
-Next create a user key and a certificate signing request in one step: (Enter <usr_common_name> when prompted and use a random passphrase)
+## CP/DP/TS key
+
+Create a \<user\> key and a certificate signing request in one step: (Enter \<usr_common_name\> when prompted and use a random passphrase)
 
 ```
-    sudo openssl req -newkey rsa:4096 -keyout <usr_common_name>.key -out <usr_common_name>.csr -config openssl.cnf -days 3650
+    openssl req -newkey rsa:4096 -keyout <usr_common_name>.key -out <usr_common_name>.csr -config openssl.cnf -days 3650
 ```
 
 Create the insecure key, the one without a passphrase, and interchange the key names:
 
 ```
     openssl rsa -in <usr_common_name>.key -out <usr_common_name>.key.insecure
-    sudo mv <usr_common_name>.key.insecure <usr_common_name>.key
+    mv <usr_common_name>.key.insecure <usr_common_name>.key
 ```
 
 Using the CSR, generate a certificate signed by the CA:
 
 ```
-    sudo openssl ca -in <usr_common_name>.csr -config openssl.cnf
+    openssl ca -in <usr_common_name>.csr -config openssl.cnf
 ```
  
 Rename certificate file:
 
 ```
-    sudo mv PSC/<usr>/certs/<index>.pem PSC/<usr>/certs/<usr_common_name>.cert
+    mv PSC/<usr>/certs/<index>.pem PSC/<usr>/certs/<usr_common_name>.cert
 ```
 
-Add the user certificate and key in the destined folders:
+Add the \<user\> certificate and key in the destined folders:
 
 ```
-    sudo mv <usr_common_name>.csr PSC/<usr>/csr/
-    sudo mv <usr_common_name>.key PSC/<usr>/private/
+    mv <usr_common_name>.csr PSC/<usr>/csr/
+    mv <usr_common_name>.key PSC/<usr>/private/
 ```
