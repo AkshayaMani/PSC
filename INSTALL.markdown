@@ -51,9 +51,13 @@ Restart your terminal.
 
 ## Installing PrivCount-patched Tor (Data Parties) dependencies
 
-A custom compiled PrivCount-patched Tor can be used to run a Data Party.
+A custom compiled PrivCount-patched Tor must be used to run a Data Party. 
 
-### Tor Dependencies
+The most up to date instructions for installing a PrivCount-patched Tor can be found here:
+
+    https://github.com/privcount/privcount/blob/master/INSTALL.markdown#installing-a-privcount-patched-tor-data-collectors
+
+/*### Tor Dependencies
 
     Debian/Ubuntu:  libssl-dev libevent-dev
     Other Linux:    libssl libssl-dev libevent libevent-devel
@@ -91,4 +95,4 @@ Tor builds with --prefix=/usr/local by default. Perform the following steps to i
     ./autogen.sh
     ./configure --disable-asciidoc --prefix=/usr/local
     make
-    sudo make install
+    sudo make install*/
