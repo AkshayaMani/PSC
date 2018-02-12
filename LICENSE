@@ -10,7 +10,13 @@ PSC is distributed under the 3-Clause BSD license:
 
 Note: This license has also been called the "New BSD License" or "Modified BSD License".
 
-Copyright 2017 Akshaya Mani, Georgetown University
+Copyright 2017-2018
+
+Akshaya Mani, Georgetown University
+
+Micah Sherr, Georgetown University
+
+Tim Wilson-Brown, University of New South Wales
 
 Redistribution and use in source and binary forms, with or without modification, are permitted provided that the following conditions are met:
 
@@ -21,5 +27,19 @@ Redistribution and use in source and binary forms, with or without modification,
 3. Neither the name of the copyright holder nor the names of its contributors may be used to endorse or promote products derived from this software without specific prior written permission.
 
 THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+===============================================================================
+
+PSC uses a modified version of https://github.com/postfix/goControlTor library to connect to Tor control port, which is distributed under the license:
+
+https://github.com/postfix/goControlTor/blob/master/LICENSE 
+
+===============================================================================
+
+Parts of DEPLOY.markdown is copied from PrivCount, which is distributed under a similar license, with an additional disclaimer of US Government copyright:
+
+https://github.com/privcount/privcount/blob/master/LICENSE
+
+https://github.com/privcount/privcount/blob/master/CONTRIBUTORS.markdown
 
 ===============================================================================
