@@ -1,8 +1,22 @@
 # Deployment
 
-First, download and install the latest version of PSC. If you are running a Data Party, also download, compile, install, and launch the latest version of the Tor PrivCount patch.
+First, download and install the latest version of PSC. 
 
-See INSTALL.markdown for details.
+If you are running a Data Party, also download, compile, install, and launch the latest version of the Tor PrivCount patch found here: 
+
+```
+    https://github.com/privcount/privcount/blob/master/INSTALL.markdown#installing-a-privcount-patched-tor-data-collectors
+```
+
+Refer INSTALL.markdown for details.
+
+## Activate environment
+
+Activate the go environment <goenvironment_name> created during installation:
+
+```
+    nv on <goenvironment_name>
+```
 
 ## Generate network CA Key 
 
@@ -17,6 +31,7 @@ Send CA certificates to all participants and verify them through a trust chain. 
 You can use PSC/keypair.sh to generate public key pairs for any CP(s), DP(s), or TS in the network. (Remember to modify default certificate folder in openssl.cnf)
 
 ```
+    cd PSC
     ./keypair.sh <usr> <usr_common_name>
 ```
 
@@ -129,6 +144,12 @@ Set the TS information in PSC/DP/ts.info:
 ```
 
 #### Relay Creation
+
+The most up to date instructions are located here:
+
+```
+    https://github.com/privcount/privcount/blob/master/DEPLOY.markdown#data-collectors
+```
 
 If you are setting up your relays for the first time, we recommend you use a
 script to create consistent relay configs. Debian and Ubuntu have:
