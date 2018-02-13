@@ -90,34 +90,4 @@ Add the root certificate and key to the destined folders:
 
 ## CP/DP/TS key
 
-Create a \<user\> key and a certificate signing request in one step: (Enter \<usr_common_name\> when prompted and use a random passphrase)
-
-```
-    openssl req -newkey rsa:4096 -keyout <usr_common_name>.key -out <usr_common_name>.csr -config openssl.cnf -days 3650
-```
-
-Create the insecure key, the one without a passphrase, and interchange the key names:
-
-```
-    openssl rsa -in <usr_common_name>.key -out <usr_common_name>.key.insecure
-    mv <usr_common_name>.key.insecure <usr_common_name>.key
-```
-
-Using the CSR, generate a certificate signed by the CA:
-
-```
-    openssl ca -in <usr_common_name>.csr -config openssl.cnf
-```
- 
-Rename certificate file:
-
-```
-    mv PSC/<usr>/certs/<index>.pem PSC/<usr>/certs/<usr_common_name>.cert
-```
-
-Add the \<user\> certificate and key in the destined folders:
-
-```
-    mv <usr_common_name>.csr PSC/<usr>/csr/
-    mv <usr_common_name>.key PSC/<usr>/private/
-```
+Use ./keypair.sh and the instructions in DEPLOY.markdown to create these keys.
