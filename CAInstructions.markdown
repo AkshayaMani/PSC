@@ -34,6 +34,8 @@ Edit openssl.cnf, and change the following fields: (Here, directory \<usr\> must
     private_key     = $dir/CA/private/<ca_name>.key # The private key
     default_days    = 3650                  		# how long to certify for
     default_bits    = 4096
+    default_md      = sha256
+    policy          = policy_match
 ```
 
 Also, add default values for country, province, organization, etc.:
