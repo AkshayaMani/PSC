@@ -26,14 +26,16 @@ Edit openssl.cnf, and change the following fields: (Here, directory \<usr\> must
 
 ```
     [ CA_default ]
-    dir             = ./                 		# Where everything is kept
+    dir             = ./                 		    # Where everything is kept
     database        = $dir/CA/index.txt     		# database index file.
-    new_certs_dir   = $dir/<usr>/certs        		# default place for new certs.
+    new_certs_dir   = $dir/CA/certs        		    # default place for new certs.
     certificate     = $dir/CA/certs/<ca_name>.cert	# The CA certificate
     serial          = $dir/CA/serial        		# The current serial number
-    private_key     = $dir/CA/private/<ca_name>.key# The private key
+    private_key     = $dir/CA/private/<ca_name>.key # The private key
     default_days    = 3650                  		# how long to certify for
     default_bits    = 4096
+    default_md      = sha256
+    policy          = policy_match
 ```
 
 Also, add default values for country, province, organization, etc.:
