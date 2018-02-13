@@ -7,7 +7,7 @@
 Create a file that keeps track of the last serial number used by the CA (each certificate must have a unique serial number):
 
 ```
-    sh -c "echo '01' > PSC/CA/serial"
+    echo '01' > PSC/CA/serial
 ```
 
 ### Index file
