@@ -90,7 +90,7 @@ Add the root certificate and key to the destined folders:
 
 ## CP/DP/TS key
 
-Create a \<user\> key and a certificate signing request in one step: (Enter \<usr_common_name\> when prompted and use a random passphrase)
+Create a \<usr\> key (where \<usr\> is one of CP/DP/TS) and a certificate signing request in one step: (Enter \<usr_common_name\> when prompted and use a random passphrase)
 
 ```
     openssl req -newkey rsa:4096 -keyout <usr_common_name>.key -out <usr_common_name>.csr -config openssl.cnf -days 3650
