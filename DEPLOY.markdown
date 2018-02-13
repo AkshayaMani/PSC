@@ -80,13 +80,6 @@ Be careful while collecting and releasing PSC results: the configured epsilon an
 
 PSC is not designed for automated collection and results release: a long enough series of results can identify the activity of a single user.
 
-After configuring parameters, run Gen_Config.go:
-
-```
-    cd PSC/TS/config
-    go run Gen_Config.go
-```
-
 #### PSC      
 
 Then run PSC in Tally Server mode:
