@@ -90,7 +90,7 @@ Then run PSC in Tally Server mode:
 The run_psc.sh script provides an easy way to (re)start PSC:
 
 ```
-    PSC/run_psc.sh <goenvironment_name> TS CName Port RestartSeconds
+    PSC/run_psc.sh <goenvironment_name> TS CName Port RestartSeconds [OptArg...]
 ```
 
 ##### Optional arguments:
@@ -126,7 +126,7 @@ Run PSC in Computation Party mode:
 The run_psc.sh script provides an easy way to (re)start PSC:
 
 ```
-    PSC/run_psc.sh <goenvironment_name> CP CName Port RestartSeconds
+    PSC/run_psc.sh <goenvironment_name> CP CName Port RestartSeconds [OptArg...]
 ```
 
 ## Data Parties
@@ -237,7 +237,7 @@ Then run PSC in Data Party mode:
 The run_psc.sh script provides an easy way to (re)start PSC:
 
 ```
-    PSC/run_psc.sh <goenvironment_name> DP CName Port RestartSeconds
+    PSC/run_psc.sh <goenvironment_name> DP CName Port RestartSeconds [OptArg...]
 ```
 
 ##### Optional arguments:

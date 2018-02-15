@@ -8,8 +8,8 @@ set -e
 set -o pipefail
 
 # Argument processing
-if [ $# -ne 5 ]; then
-    echo "usage: $0 GoEnv CP|DP|TS CN Port RestartSeconds"
+if [ $# -lt 5 ]; then
+    echo "usage: $0 GoEnv CP|DP|TS CN Port RestartSeconds [OptArg...]"
     exit 1
 fi
 
@@ -44,7 +44,7 @@ while true; do
     # Launch the command in the correct environment
     # Don't exit this script on a non-zero exit status, just print it
     nv do "$PSC_GOENV" \
-        "go run $PSC_USR_LOWER.go -$PSC_USR_CMD $PSC_CNAME -p $PSC_PORT" \
+        "go run $PSC_USR_LOWER.go -$PSC_USR_CMD $PSC_CNAME -p $PSC_PORT $@" \
         2>&1 \
         | tee -a "$PSC_SCRIPT_DIR"/"$PSC_USR_LOWER.$PSC_CNAME".log \
         || echo "Exit $?"
