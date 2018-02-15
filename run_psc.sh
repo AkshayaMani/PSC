@@ -13,16 +13,29 @@ if [ $# -ne 5 ]; then
     exit 1
 fi
 
-SCRIPT_DIR=`dirname "$0"`
+PSC_SCRIPT_DIR=`dirname "$0"`
 
-USR_UPPER=`echo "$2" | tr 'a-z' 'A-Z'`
-USR_LOWER=`echo "$2" | tr 'A-Z' 'a-z'`
-USR_CMD=`echo "$USR_LOWER" | head -c 1`
+PSC_GOENV="$1"
+shift
+
+PSC_USR_UPPER=`echo "$1" | tr 'a-z' 'A-Z'`
+PSC_USR_LOWER=`echo "$1" | tr 'A-Z' 'a-z'`
+PSC_USR_CMD=`echo "$PSC_USR_LOWER" | head -c 1`
+shift
+
+PSC_CNAME="$1"
+shift
+
+PSC_PORT="$1"
+shift
+
+PSC_RESTART="$1"
+shift
 
 # Prepare to launch the command
 [ -f "$HOME/.envirius/nv" ] && . ~/.envirius/nv
 
-cd "$SCRIPT_DIR"/"$USR_UPPER"
+cd "$PSC_SCRIPT_DIR"/"$PSC_USR_UPPER"
 
 # Echo commands
 set -x
@@ -30,7 +43,11 @@ set -x
 while true; do
     # Launch the command in the correct environment
     # Don't exit this script on a non-zero exit status, just print it
-    nv do "$1" "go run $USR_LOWER.go -$USR_CMD $3 -p $4" 2>&1 | tee -a "$SCRIPT_DIR"/"$USR_LOWER.$3".log || echo "Exit $?"
+    nv do "$PSC_GOENV" \
+        "go run $PSC_USR_LOWER.go -$PSC_USR_CMD $PSC_CNAME -p $PSC_PORT" \
+        2>&1 \
+        | tee -a "$PSC_SCRIPT_DIR"/"$PSC_USR_LOWER.$PSC_CNAME".log \
+        || echo "Exit $?"
     # Wait for relaunch
-    sleep "$5"
+    sleep "$PSC_RESTART"
 done
