@@ -80,7 +80,7 @@ Create the insecure key, the one without a passphrase, and interchange the key n
 Next, create the self-signed root certificate:
 
 ```
-    openssl req -new -x509 -days 3650 -key <ca_name>.key -out <ca_name>.cert -config <openssl_configuration_file>
+    openssl req -new -x509 -days 3650 -key <ca_name>.key -out <ca_name>.cert -config openssl.cnf
 ```
 
 Add the root certificate and key to the destined folders:
