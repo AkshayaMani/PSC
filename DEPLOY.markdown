@@ -87,6 +87,12 @@ Then run PSC in Tally Server mode:
     go run ts.go -t "<TS_common_name>" -p "<TS_port>"
 ```
 
+The run_psc.sh script provides an easy way to (re)start PSC:
+
+```
+    PSC/run_psc.sh <goenvironment_name> TS CName Port RestartSeconds [OptArg...]
+```
+
 ##### Optional arguments:
 ```
     -c   Configuration file path
@@ -115,6 +121,12 @@ Run PSC in Computation Party mode:
 ```
     cd PSC/CP/
     go run cp.go -c "<CP_common_name>" -p "<CP_port>"
+```
+
+The run_psc.sh script provides an easy way to (re)start PSC:
+
+```
+    PSC/run_psc.sh <goenvironment_name> CP CName Port RestartSeconds [OptArg...]
 ```
 
 ## Data Parties
@@ -220,6 +232,12 @@ Then run PSC in Data Party mode:
 ```
     cd PSC/DP/
     go run ts.go -d "<DP_common_name>" -p "<DP_port>"
+```
+
+The run_psc.sh script provides an easy way to (re)start PSC:
+
+```
+    PSC/run_psc.sh <goenvironment_name> DP CName Port RestartSeconds [OptArg...]
 ```
 
 ##### Optional arguments:
