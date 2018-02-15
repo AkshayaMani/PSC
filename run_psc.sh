@@ -17,6 +17,7 @@ SCRIPT_DIR=`dirname "$0"`
 
 USR_UPPER=`echo "$2" | tr 'a-z' 'A-Z'`
 USR_LOWER=`echo "$2" | tr 'A-Z' 'a-z'`
+USR_CMD=`echo "$USR_LOWER" | head -c 1`
 
 # Prepare to launch the command
 [ -f "$HOME/.envirius/nv" ] && . ~/.envirius/nv
@@ -29,7 +30,7 @@ set -x
 while true; do
     # Launch the command in the correct environment
     # Don't exit this script on a non-zero exit status, just print it
-    nv do "$1" "go run $USR_LOWER.go -c $3 -p $4" 2>&1 | tee -a "$SCRIPT_DIR"/"$USR_LOWER.$3".log || echo "Exit $?"
+    nv do "$1" "go run $USR_LOWER.go -$USR_CMD $3 -p $4" 2>&1 | tee -a "$SCRIPT_DIR"/"$USR_LOWER.$3".log || echo "Exit $?"
     # Wait for relaunch
     sleep "$5"
 done
