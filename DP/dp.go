@@ -74,6 +74,7 @@ var q_to_e = map[string]string{ //Map query
 
     "ExitFirstLevelDomainWebInitialStream": "PRIVCOUNT_STREAM_ENDED",
     "ExitFirstLevelDomainAlexa1MWebInitialStream": "PRIVCOUNT_STREAM_ENDED",
+    "ExitTopLevelDomainAlexa1MWebInitialStream": "PRIVCOUNT_STREAM_ENDED",
 }
 
 func main() {
@@ -212,6 +213,8 @@ func main() {
 
                 case <-finish:
 
+                    torControl.SetTimeOut(time.Now().Add(0)) //Immediately time out
+
                     wg.Wait() //Wait for all go routines to finish
 
                     if step_no == 4 { //Finish
@@ -272,7 +275,7 @@ func handleTS(conn net.Conn) {
 
             assignConfig(config) //Assign configuration
 
-            if query == "ExitFirstLevelDomainAlexa1MWebInitialStream" {
+            if query == "ExitFirstLevelDomainAlexa1MWebInitialStream" || query == "ExitTopLevelDomainAlexa1MWebInitialStream" {
 
                 domain_list := match.LoadDomainList("domain-top-fld-1m.txt")
 
@@ -472,7 +475,7 @@ func collectData () {
         }
     }
 
-    <- data_col_sig //Wait for data collection finish signal
+    sig := <- data_col_sig //Wait for data collection signal
 
     mutex.Lock() //Lock mutex
 
@@ -481,8 +484,11 @@ func collectData () {
 
     d_flag = true //Set data collection finish flag
 
-    sendTSSignal(ts_s_no+2) //Send signal to TS
-    logging.Info.Println("Sent TS signal ", 2)
+    if sig == true {
+
+        sendTSSignal(ts_s_no+2) //Send signal to TS
+        logging.Info.Println("Sent TS signal ", 2)
+    }
 
     mutex.Unlock() //Unlock mutex
 }
@@ -495,7 +501,9 @@ func torControlPortReceive(torControl *goControlTor.TorControl) {
 
     <- data_col_sig //Wait for data collection start signal
 
-    torControl.SetTimeOut(time.Now().Add(24 * time.Duration(epoch) * time.Hour)) //Collect for an epoch
+    colstart := time.Now() //Data collection start time
+
+    torControl.SetTimeOut(colstart.Add(24 * time.Duration(epoch) * time.Hour)) //Collect for an epoch
 
     for {
 
@@ -505,7 +513,14 @@ func torControlPortReceive(torControl *goControlTor.TorControl) {
 
             if strings.HasSuffix(err.Error(), "i/o timeout") { //If timeout error
 
-                data_col_sig <- true //Send data collection finish signal
+                if time.Now().After(colstart.Add(24 * time.Duration(epoch) * time.Hour)) { //Data collected for an epoch 
+
+                    data_col_sig <- true //Send data collection finish signal
+
+                } else {
+
+                    data_col_sig <- false //Send data collection abort signal
+                }
 
                 return
 
@@ -570,6 +585,15 @@ func handle_stream_event(event []string, query string) {
             if exact_match := match.ExactMatch(domain_map, fld); exact_match != "" {
 
                 incrementCounter(exact_match) //Increment counter
+            }
+
+        } else if query == "ExitTopLevelDomainAlexa1MWebInitialStream" && fld != "" {
+
+            if exact_match := match.ExactMatch(domain_map, fld); exact_match != "" {
+
+                tld, _ := publicsuffix.PublicSuffix(strings.ToLower(exact_match))
+
+                incrementCounter(tld) //Increment counter
             }
         }
     }
