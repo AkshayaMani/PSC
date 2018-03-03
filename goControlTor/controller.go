@@ -387,7 +387,7 @@ func (t *TorControl) StartCollection(event string) (error, string) {
 
     if t.state == "waiting" {
 
-        err := t.SendCommand("SETCONF __ReloadTorrcOnSIGHUP=0\r\n")
+        /*err := t.SendCommand("SETCONF __ReloadTorrcOnSIGHUP=0\r\n")
 
         if err != nil {
 
@@ -399,7 +399,7 @@ func (t *TorControl) StartCollection(event string) (error, string) {
         if err != nil {
 
             return err, log
-        }
+        }*/
 
         err = t.SendCommand("SETEVENTS " + t.event + "\r\n")
 
@@ -434,7 +434,7 @@ func (t *TorControl) StopCollection() error {
         return err
     }
 
-    err = t.SendCommand("SETCONF EnablePrivCount=0\r\n")
+    /*err = t.SendCommand("SETCONF EnablePrivCount=0\r\n")
 
     if err != nil {
 
@@ -446,7 +446,7 @@ func (t *TorControl) StopCollection() error {
     if err != nil {
 
         return err
-    }
+    }*/
 
     t.state = "waiting"
 
