@@ -121,7 +121,7 @@ Set the TS information in PSC/CP/ts.info:
     CN <TS_common_name>
 ```
 
-### PSC
+#### PSC
 
 Run PSC in Computation Party mode:
 
@@ -136,7 +136,7 @@ The run_psc.sh script provides an easy way to (re)start PSC:
     PSC/run_psc.sh <goenvironment_name> CP CName Port RestartSeconds [OptArg...]
 ```
 
-#### Optional arguments:
+##### Optional arguments:
 ```
     -t 	  TS information file path
 ```
