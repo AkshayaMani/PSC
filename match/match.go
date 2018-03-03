@@ -1,11 +1,3 @@
-/*
-Created on Apr 18, 2017
-
-@author: Akshaya Mani, Georgetown University
-
-See LICENSE for licensing information
-*/
-
 package match
 
 import (
@@ -20,7 +12,7 @@ import (
 
 /*func main() {
 
-    domain_list := LoadDomainList("../../../../privcount/test/domain-top-1m.txt")
+    domain_list := LoadDomainList("../DP/data/sld-Alexa-top-1m.txt", -1)
 
     fmt.Println(domain_list)
 
@@ -57,9 +49,16 @@ import (
 }*/
 
 //Input: File Path
-//Output: List of domains
+//Output: List of domains, No.of domains (-1 represents full list)
 //Function: Load domains from file to list
-func LoadDomainList(file_path string) (domain_list []string) {
+func LoadDomainList(file_path string, no_of_domains int) (domain_list []string) {
+
+    if no_of_domains < -1 {//If no. of domains negative
+
+        checkError(fmt.Errorf("Invalid no. of domains")) //Invalid no. of domains    
+    }
+
+    count := 0 //Count of domains
 
     //Open file
     file, err := os.Open(file_path)
@@ -69,6 +68,16 @@ func LoadDomainList(file_path string) (domain_list []string) {
     //Read line by line
     scanner := bufio.NewScanner(file)
     for scanner.Scan() {
+
+        count = count + 1 //Increment count
+
+        if no_of_domains != -1 { //If not entire list
+
+            if count > no_of_domains { //If count exceeds no. of domains
+
+                break
+            }
+        }
 
         domain := strings.ToLower(scanner.Text()) //Convert to lower case
         domain = strings.Trim(domain, " ") //Strip white spaces

@@ -26,6 +26,7 @@ import (
     "net"
     "os"
     "PSC/DP/dpres"
+    "PSC/asn"
     "PSC/goControlTor"
     "PSC/logging"
     "PSC/match"
@@ -47,6 +48,7 @@ var b int64 //Hash table size
 var ts_cname string //TS hostname
 var ts_addr string //TS address
 var query string //Query
+var qlist []string //Query list
 var cp_cnames []string //CP common names
 var dp_cnames []string //DP common names
 var cp_addr []string //CP addresses
@@ -67,14 +69,18 @@ var wg = &sync.WaitGroup{} //WaitGroup to wait for all goroutines to shutdown
 
 var torControl = &goControlTor.TorControl{} //Tor control port connection
 var domain_map = map[string]bool{} //Domain map
+var ipv4asnmap = map[string]map[string]string{} //IPv4 to ASN map
+var ipv6asnmap = map[string]map[string]string{} //IPv6 to ASN map  
 var message chan string //Channel to receive message from Tor control port
 var data_col_sig chan bool //Channel to send data collection signal
 var d_flag bool //Data collection finish Flag
 var q_to_e = map[string]string{ //Map query
 
-    "ExitFirstLevelDomainWebInitialStream": "PRIVCOUNT_STREAM_ENDED",
-    "ExitFirstLevelDomainAlexa1MWebInitialStream": "PRIVCOUNT_STREAM_ENDED",
-    "ExitTopLevelDomainAlexa1MWebInitialStream": "PRIVCOUNT_STREAM_ENDED",
+    "ExitSecondLevelDomainWebInitialStream": "PRIVCOUNT_STREAM_ENDED",
+    "ExitSecondLevelDomainAlexaWebInitialStream": "PRIVCOUNT_STREAM_ENDED",
+    "EntryRemoteIPAddress": "PRIVCOUNT_CONNECTION_CLOSE",
+    "EntryRemoteIPAddressCountry": "PRIVCOUNT_CONNECTION_CLOSE",
+    "EntryRemoteIPAddressAS": "PRIVCOUNT_CONNECTION_CLOSE",
 }
 
 func main() {
@@ -207,7 +213,14 @@ func main() {
 
                         if event[0] == q_to_e[query] {
 
-                            handle_stream_event(event[1:], query)
+                            if q_to_e[query] == "PRIVCOUNT_STREAM_ENDED" {
+
+                                handle_stream_event(event[1:])
+
+                            } else if q_to_e[query] == "PRIVCOUNT_CONNECTION_CLOSE" {
+
+                                handle_connection_event(event[1:])
+                            }
                         }
                     }
 
@@ -275,11 +288,52 @@ func handleTS(conn net.Conn) {
 
             assignConfig(config) //Assign configuration
 
-            if query == "ExitFirstLevelDomainAlexa1MWebInitialStream" || query == "ExitTopLevelDomainAlexa1MWebInitialStream" {
+            if query == "ExitSecondLevelDomainAlexaWebInitialStream" {
 
-                domain_list := match.LoadDomainList("domain-top-fld-1m.txt")
+                var no_of_domains int //No. of domains
+
+                if len(qlist) == 1 || len(qlist) == 0 {
+
+                    if len(qlist) == 0 {
+
+                        no_of_domains = -1
+
+                    } else {
+
+                        var err error //Error
+                        no_of_domains, err = strconv.Atoi(qlist[0]) //Convert to integer
+
+                        checkError(err) //Check error
+                    }
+
+                } else {
+
+                    checkError(fmt.Errorf("%s has invalid list", query)) //Invalid query list
+                }
+
+                domain_list := match.LoadDomainList("data/sld-Alexa-top-1m.txt", no_of_domains)
 
                 domain_map = match.ExactMatchCreateMap(domain_list)
+
+            } else if query == "EntryRemoteIPAddressAS" {
+
+                if len(qlist) == 0 {
+
+                    query = "EntryRemoteIPAddress" 
+
+                } else {
+
+                    ipv4asnmap = asn.CreateIPASNMap("data/as-ipv4-coalesced-20171126.ipasn", 4)
+                    ipv6asnmap = asn.CreateIPASNMap("data/as-ipv6-20171127.ipasn", 6)
+                } 
+
+            } else if query == "EntryRemoteIPAddressCountry" {
+
+                if len(qlist) == 0 {
+
+                    query = "EntryRemoteIPAddress"
+
+                }
             }
 
             logging.Info.Println("Sending TS signal. Step No.", step_no)
@@ -536,9 +590,9 @@ func torControlPortReceive(torControl *goControlTor.TorControl) {
     }
 }
 
-//Input: Event, Query
+//Input: Event
 //Function: Handle stream event and increment counter
-func handle_stream_event(event []string, query string) {
+func handle_stream_event(event []string) {
 
     port := event[3] //Remote port
     remote_host := event[8] //Remote host address
@@ -576,25 +630,65 @@ func handle_stream_event(event []string, query string) {
 
         fld, _ := publicsuffix.EffectiveTLDPlusOne(strings.ToLower(remote_host))
 
-        if query == "ExitFirstLevelDomainWebInitialStream" && fld != "" {
+        if query == "ExitSecondLevelDomainWebInitialStream" && fld != "" {
 
            incrementCounter(fld) //Increment counter
 
-        } else if query == "ExitFirstLevelDomainAlexa1MWebInitialStream" && fld != "" {
+        } else if query == "ExitSecondLevelDomainAlexaWebInitialStream" && fld != "" {
 
             if exact_match := match.ExactMatch(domain_map, fld); exact_match != "" {
 
                 incrementCounter(exact_match) //Increment counter
             }
+        }
+    }
+}
 
-        } else if query == "ExitTopLevelDomainAlexa1MWebInitialStream" && fld != "" {
+//Input: Event
+//Function: Handle connection event and increment counter
+func handle_connection_event(event []string) {
 
-            if exact_match := match.ExactMatch(domain_map, fld); exact_match != "" {
+    eventmap := map[string]string{}
 
-                tld, _ := publicsuffix.PublicSuffix(strings.ToLower(exact_match))
+    for i := 0; i < len(event); i++ {
 
-                incrementCounter(tld) //Increment counter
+        tmp := strings.Split(event[i], "=")
+        eventmap[tmp[0]] = tmp[1]
+    }
+
+    if query == "EntryRemoteIPAddress" {
+
+        incrementCounter(eventmap["RemoteIPAddress"]) //Increment counter
+
+    } else if query == "EntryRemoteIPAddressCountry" {
+
+        if eventmap["RemoteCountryCode"] != "!!" && eventmap["RemoteCountryCode"] != "??" { 
+
+            if contains(qlist, eventmap["RemoteCountryCode"]) {
+
+                incrementCounter(eventmap["RemoteIPAddress"])
             }
+        }
+
+    } else if query == "EntryRemoteIPAddressAS" {
+
+        var asno string //ASN
+
+        if net.ParseIP(eventmap["RemoteIPAddress"]) != nil {
+
+            if net.ParseIP(eventmap["RemoteIPAddress"]).To4 != nil {
+
+                asno = asn.FindASN(ipv4asnmap, 4, eventmap["RemoteIPAddress"]) //Find ASN from IPv4 to ASN map 
+
+            } else {
+
+                asno = asn.FindASN(ipv6asnmap, 6, eventmap["RemoteIPAddress"]) //Find ASN from IPv6 to ASN map
+            }
+        }
+
+        if contains(qlist, asno) {
+
+            incrementCounter(eventmap["RemoteIPAddress"])
         }
     }
 }
@@ -699,8 +793,22 @@ func assignConfig(config *TSmsg.Config) {
     if _, ok := q_to_e[query]; !ok { //Check if query is valid
 
         checkError(fmt.Errorf("%s is not a valid Query", query))
-    }
 
+    } else {
+
+        if query == "ExitSecondLevelDomainWebInitialStream" || query == "EntryRemoteIPAddress" {
+
+            if len(config.QList) != 0 {
+
+                checkError(fmt.Errorf("%s has invalid list", query))
+            }
+
+        } else {
+
+            qlist = make([]string, len(config.QList)) //Query list
+            copy(qlist[:], config.QList) //Assign Query list
+        }
+    }
 
     cp_cnames = make([]string, no_CPs) //CP common names
     cp_addr = make([]string, no_CPs) //CP addresses

@@ -25,14 +25,19 @@ func main() {
     var cp_addr = []string{"10.176.5.24:6100", "10.176.5.25:6100"} //CP addresses
     var dp_addr = []string{"10.176.5.22:7100", "10.176.5.23:7100"} //DP addresses
     var epoch = 1 //Epoch for data collection
-    //var epsilon = 0.3 //Epsilon
-    //var delta = math.Pow(10, -13) //Delta
-    var query = "ExitFirstLevelDomainWebInitialStream" //Query
-    //var query = "ExitFirstLevelDomainAlexa1MWebInitialStream" //Query
+    var query = "ExitSecondLevelDomainWebInitialStream"
+    //var query = "ExitSecondLevelDomainAlexaWebInitialStream"
+    //var query = "EntryRemoteIPAddress"
+    //var query = "EntryRemoteIPAddressCountry"
+    //var query = "EntryRemoteIPAddressAS"
+    //var qlist = []string{"-1"} //Query list
+    //var qlist = []string{"15169", "56203", "6939"} //Query list
+    //var qlist = []string{"US", "AA"} //Query list
+    var qlist []string //Query list
 
     //Compute noise
     //n := int64(math.Floor((math.Log(1 / delta) * 12.5 * math.Pow(sensitivity, 2))/math.Pow(epsilon, 2))) + 1 //No. of Noise vectors
-    n := int64(4934908)
+    n := int64(789592)
 
     //Assign PSC configuration parameters
     config := new(TSmsg.Config)
@@ -55,6 +60,9 @@ func main() {
 
     config.Tsize = proto.Int64(int64(b))
     config.Query = proto.String(query)
+
+    config.QList = make([]string, len(qlist))
+    copy(config.QList[:], qlist)
 
     //Write to config file
     out, err := proto.Marshal(config)
@@ -81,6 +89,7 @@ func main() {
     fmt.Println("DP IPs:", config1.DPaddr)
     fmt.Println("Table size:", *config1.Tsize)
     fmt.Println("Query:", *config1.Query)
+    fmt.Println("Query list:", config1.QList)
 }
 
 //Check Error

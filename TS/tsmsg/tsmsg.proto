@@ -21,6 +21,7 @@ message Config {
   repeated string DPaddr = 9;
   required int64 Tsize = 10;
   required string Query = 11;
+  repeated string QList = 12;
 }
 
 message Signal {

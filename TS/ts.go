@@ -34,7 +34,8 @@ var b int64 //Hash table size
 var no_Expts int //No. of measurements
 var noise int64 //No. of noise bins
 var epoch int //Epoch
-var query string //Query
+var query string //Query name
+var qlist []string //Query list
 var cp_cnames []string //CP common names
 var dp_cnames []string //DP common names
 var cp_addr []string //CP addresses
@@ -132,9 +133,11 @@ func main() {
             config.Ndps = proto.Int32(int32(no_DPs))
             config.DPcnames = make([]string, no_DPs)
             config.DPaddr = make([]string, no_DPs)
+            config.QList = make([]string, len(qlist))
 
             copy(config.DPcnames[:], dp_cnames)
             copy(config.DPaddr[:], dp_addr)
+            copy(config.QList[:], qlist)
 
             config.Tsize = proto.Int64(int64(b))
             config.Query = proto.String(query)
@@ -570,7 +573,7 @@ func handleClients(clientconn chan net.Conn, com_name string) {
 
                         //Write to config file
                         out, _ := proto.Marshal(result)
-                        ioutil.WriteFile("result/"+query+time.Now().Local().Format("2006-01-02")+"_"+query+time.Now().Local().Format("15:04:05"), out, 0644)
+                        ioutil.WriteFile("result/"+query+time.Now().Local().Format("2006-01-02")+"_"+time.Now().Local().Format("15:04:05"), out, 0644)
 
                         cp_step_no += 1 //Increment CP step no.
 
@@ -649,7 +652,9 @@ func assignConfig(config_file string) {
     no_CPs = int(*config.Ncps) //No.of CPs
     no_DPs = int(*config.Ndps) //No. of DPs
     epoch = int(*config.Epoch) //Epoch
-    query = *config.Query //Query
+    query = *config.Query //Query name
+    qlist = make([]string, len(config.QList)) //Query list
+    copy(qlist[:], config.QList) //Assign query list
     noise = *config.Noise //No. of noise bins
     b = *config.Tsize //Hash table size
     cp_cnames  = make([]string, no_CPs) //CP common names
