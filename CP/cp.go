@@ -36,6 +36,7 @@ import (
     "PSC/logging"
     "PSC/par"
     "PSC/TS/tsmsg"
+    "runtime/debug"
     "strconv"
     "strings"
     "sync"
@@ -100,6 +101,8 @@ var wg = &sync.WaitGroup{} //WaitGroup to wait for all goroutines to shutdown
 var start time.Time
 
 func main() {
+
+    debug.SetGCPercent(5) //Set garbage collection parameter
 
     logging.LogToFile("logs/Connection"+time.Now().Local().Format("2006-01-02")+"_"+time.Now().Local().Format("15:04:05"))
 
