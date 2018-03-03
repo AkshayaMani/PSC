@@ -213,7 +213,7 @@ Password Authentication:
 
 ```
 cat /dev/random | hexdump -e '"%x"' -n 32 -v > PSC/DP/control_password.txt
-tor --hash-password `cat control_password.txt`
+tor --hash-password `cat PSC/DP/control_password.txt`
 ```
 
 torrc:
