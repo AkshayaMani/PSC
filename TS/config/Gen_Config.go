@@ -34,10 +34,7 @@ func main() {
     //var qlist = []string{"15169", "56203", "6939"} //Query list
     //var qlist = []string{"US", "AA"} //Query list
     var qlist []string //Query list
-
-    //Compute noise
-    //n := int64(math.Floor((math.Log(1 / delta) * 12.5 * math.Pow(sensitivity, 2))/math.Pow(epsilon, 2))) + 1 //No. of Noise vectors
-    n := int64(789592)
+    var n = int64(789592)  //No. of noise vectors
 
     //Assign PSC configuration parameters
     config := new(TSmsg.Config)

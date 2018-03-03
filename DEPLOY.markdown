@@ -71,6 +71,7 @@ Set the PSC parameters in PSC/TS/config/Gen_Config.go:
     //var qlist = []string{"15169", "56203", "6939"} //Query list
     //var qlist = []string{"US", "AA"} //Query list
     var qlist []string //Query list
+    var n = int64(789592)  //No. of noise vectors
 ```
 
 And generate configuration:
