@@ -136,6 +136,11 @@ The run_psc.sh script provides an easy way to (re)start PSC:
     PSC/run_psc.sh <goenvironment_name> CP CName Port RestartSeconds [OptArg...]
 ```
 
+#### Optional arguments:
+```
+    -t 	  TS information file path
+```
+
 ## Data Parties
 
 You need one PSC Data Party per tor relay.
@@ -252,4 +257,5 @@ The run_psc.sh script provides an easy way to (re)start PSC:
     -ca   Tor control port listen address
     -cp   Tor control port
     -pf   Tor control hashed password file path
+    -t    TS information file path
 ```
