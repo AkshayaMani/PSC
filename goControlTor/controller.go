@@ -401,7 +401,7 @@ func (t *TorControl) StartCollection(event string) (error, string) {
             return err, log
         }*/
 
-        err = t.SendCommand("SETEVENTS " + t.event + "\r\n")
+        err := t.SendCommand("SETEVENTS " + t.event + "\r\n")
 
         if err != nil {
 
