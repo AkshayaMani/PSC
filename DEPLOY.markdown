@@ -102,7 +102,7 @@ The run_psc.sh script provides an easy way to (re)start PSC:
 
 Note: if you specify any optional arguments, they must be all one string
 (use a single pair of double quotes around them all). For example:
-`"-cp 1234 -t file.txt"`
+`"-c config/config.params -e 1"`
 
 ##### Optional arguments:
 ```
@@ -142,7 +142,7 @@ The run_psc.sh script provides an easy way to (re)start PSC:
 
 Note: if you specify any optional arguments, they must be all one string
 (use a single pair of double quotes around them all). For example:
-`"-cp 1234 -t file.txt"`
+`"-t ./ts.info"`
 
 ##### Optional arguments:
 ```
@@ -262,7 +262,7 @@ The run_psc.sh script provides an easy way to (re)start PSC:
 
 Note: if you specify any optional arguments, they must be all one string
 (use a single pair of double quotes around them all). For example:
-`"-cp 1234 -t file.txt"`
+`"-cp 1234 -t ./ts.info"`
 
 ##### Optional arguments:
 ```
