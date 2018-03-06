@@ -100,6 +100,10 @@ The run_psc.sh script provides an easy way to (re)start PSC:
     PSC/run_psc.sh <goenvironment_name> TS CName Port RestartSeconds [OptArg...]
 ```
 
+Note: if you specify any optional arguments, they must be all one string
+(use a single pair of double quotes around them all). For example:
+`"-cp 1234 -t file.txt"`
+
 ##### Optional arguments:
 ```
     -c   Configuration file path
@@ -135,6 +139,10 @@ The run_psc.sh script provides an easy way to (re)start PSC:
 ```
     PSC/run_psc.sh <goenvironment_name> CP CName Port RestartSeconds [OptArg...]
 ```
+
+Note: if you specify any optional arguments, they must be all one string
+(use a single pair of double quotes around them all). For example:
+`"-cp 1234 -t file.txt"`
 
 ##### Optional arguments:
 ```
@@ -251,6 +259,10 @@ The run_psc.sh script provides an easy way to (re)start PSC:
 ```
     PSC/run_psc.sh <goenvironment_name> DP CName Port RestartSeconds [OptArg...]
 ```
+
+Note: if you specify any optional arguments, they must be all one string
+(use a single pair of double quotes around them all). For example:
+`"-cp 1234 -t file.txt"`
 
 ##### Optional arguments:
 ```
