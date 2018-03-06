@@ -87,7 +87,7 @@ func main() {
 
     logging.LogToFile("logs/Connection"+time.Now().Local().Format("2006-01-02")+"_"+time.Now().Local().Format("15:04:05"))
 
-    dp_port, control_addr, control_port, passwd_file, tsinfo_file := parseCommandline(os.Args) //Parse DP common name & port number, Tor control address & port no., hashed password file path, and TS information file path
+    dp_host, dp_port, control_addr, control_port, passwd_file, tsinfo_file := parseCommandline(os.Args) //Parse DP common name & port number, Tor control address & port no., hashed password file path, and TS information file path
 
     //Assign TS information
     file, err := os.Open(tsinfo_file)
@@ -148,7 +148,7 @@ func main() {
 
         //Listen to the TCP port
         var err error
-        ln, err = net.Listen("tcp", ":"+dp_port)
+        ln, err = net.Listen("tcp", dp_host+":"+dp_port)
         checkError(err)
 
         logging.LogToFile("logs/"+dp_cname+time.Now().Local().Format("2006-01-02")+"_"+time.Now().Local().Format("15:04:05"))
@@ -709,8 +709,9 @@ func incrementCounter(event string) {
 //Input: Command-line Arguments
 //Output: DP port number, Tor control address, Tor control port, Tor control hashed password file path, TS information file path
 //Function: Parse Command-line Arguments
-func parseCommandline(arg []string) (string, string, string, string, string) {
+func parseCommandline(arg []string) (string, string, string, string, string, string) {
 
+    var dp_host string
     var dp_port string //DP port number
     var e_flag = false //Exit flag
     var control_addr string //Tor control address
@@ -718,6 +719,7 @@ func parseCommandline(arg []string) (string, string, string, string, string) {
     var passwd_file string //Tor control hashed password file path
     var tsinfo_file string //TS information file path
 
+    flag.StringVar(&dp_host, "h", "", "DP hostname to which to bind")
     flag.StringVar(&dp_port, "p", "", "DP port number (required)")
     flag.StringVar(&dp_cname, "d", "", "DP common name (required)")
     flag.StringVar(&control_addr, "ca", "127.0.0.1", "Tor control port listen address")
@@ -749,7 +751,7 @@ func parseCommandline(arg []string) (string, string, string, string, string) {
         os.Exit(0) //Exit
     }
 
-    return dp_port, control_addr, control_port, passwd_file, tsinfo_file
+    return dp_host, dp_port, control_addr, control_port, passwd_file, tsinfo_file
 }
 
 //Function: Initialize variables
