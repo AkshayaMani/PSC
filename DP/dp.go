@@ -189,7 +189,8 @@ func main() {
 
                     mutex.Lock() //Lock mutex
 
-                    event, _, _, log := torControl.CommandParse(msg) //Print command
+                    event, _, err, log := torControl.CommandParse(msg) //Print command
+                    checkError(err)
 
                     mutex.Unlock() //Unlock mutex
 
@@ -246,6 +247,8 @@ func main() {
 
                 default:
             }
+
+            time.Sleep(10 * time.Millisecond)
         }
     }
 }
