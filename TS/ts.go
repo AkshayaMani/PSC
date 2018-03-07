@@ -236,6 +236,8 @@ func main() {
 
                     default:
                 }
+
+                time.Sleep(10 * time.Millisecond)
             }
 
         } else {
