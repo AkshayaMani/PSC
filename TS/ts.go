@@ -62,7 +62,7 @@ func main() {
 
     logging.LogToFile("logs/Connection"+time.Now().Local().Format("2006-01-02")+"_"+time.Now().Local().Format("15:04:05"))
 
-    ts_port, config_file := parseCommandline(os.Args) //Parse TS common name & port number and configuration file path
+    ts_host, ts_port, config_file := parseCommandline(os.Args) //Parse TS hostname, common name & port number, and configuration file path
 
     logging.Info.Println("Parsed command-line arguments")
 
@@ -81,7 +81,7 @@ func main() {
 
         //Listen to the TCP port
         var err error
-        ln, err = net.Listen("tcp", ":"+ts_port)
+        ln, err = net.Listen("tcp", ts_host+":"+ts_port)
         checkError(err)
 
         logging.LogToFile("logs/"+ts_cname+time.Now().Local().Format("2006-01-02")+"_"+time.Now().Local().Format("15:04:05"))
@@ -600,12 +600,14 @@ func handleClients(clientconn chan net.Conn, com_name string) {
 //Input: Command-line arguments
 //Output: TS port number, Configuration file path
 //Function: Parse Command-line arguments
-func parseCommandline(arg []string) (string, string) {
+func parseCommandline(arg []string) (string, string, string) {
 
+    var ts_host string //TS hostname
     var ts_port string //TS port number
     var e_flag = false //Exit flag
     var config_file string //Config file path
 
+    flag.StringVar(&ts_host, "h", "", "TS hostname to which to bind")
     flag.StringVar(&ts_cname, "t", "", "TS common name (required)")
     flag.StringVar(&ts_port, "p", "", "TS port number (required)")
     flag.StringVar(&config_file, "c", "config/config.params", "Config file path")
@@ -636,7 +638,7 @@ func parseCommandline(arg []string) (string, string) {
         os.Exit(0) //Exit
     }
 
-    return ts_port, config_file
+    return ts_host, ts_port, config_file
 }
 
 //Input: Configuration file path

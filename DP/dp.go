@@ -87,7 +87,7 @@ func main() {
 
     logging.LogToFile("logs/Connection"+time.Now().Local().Format("2006-01-02")+"_"+time.Now().Local().Format("15:04:05"))
 
-    dp_host, dp_port, control_addr, control_port, passwd_file, tsinfo_file := parseCommandline(os.Args) //Parse DP common name & port number, Tor control address & port no., hashed password file path, and TS information file path
+    dp_host, dp_port, control_addr, control_port, passwd_file, tsinfo_file := parseCommandline(os.Args) //Parse DP hostname, common name & port number, Tor control address & port no., hashed password file path, and TS information file path
 
     //Assign TS information
     file, err := os.Open(tsinfo_file)
@@ -711,7 +711,7 @@ func incrementCounter(event string) {
 //Function: Parse Command-line Arguments
 func parseCommandline(arg []string) (string, string, string, string, string, string) {
 
-    var dp_host string
+    var dp_host string //DP hostname
     var dp_port string //DP port number
     var e_flag = false //Exit flag
     var control_addr string //Tor control address

@@ -106,6 +106,7 @@ Note: if you specify any optional arguments, they must be all one string
 
 ##### Optional arguments:
 ```
+    -h   TS hostname to which to bind
     -c   Configuration file path
     -e   No. of experiments
 ```
@@ -146,6 +147,7 @@ Note: if you specify any optional arguments, they must be all one string
 
 ##### Optional arguments:
 ```
+    -h    CP hostname to which to bind
     -t 	  TS information file path
 ```
 
@@ -266,6 +268,7 @@ Note: if you specify any optional arguments, they must be all one string
 
 ##### Optional arguments:
 ```
+    -h    DP hostname to which to bind
     -ca   Tor control port listen address
     -cp   Tor control port
     -pf   Tor control hashed password file path

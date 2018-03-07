@@ -106,7 +106,7 @@ func main() {
 
     logging.LogToFile("logs/Connection"+time.Now().Local().Format("2006-01-02")+"_"+time.Now().Local().Format("15:04:05"))
 
-    cp_port, tsinfo_file := parseCommandline(os.Args) //Parse CP common name & port, and TS information file path
+    cp_host, cp_port, tsinfo_file := parseCommandline(os.Args) //Parse CP hostname, common name & port, and TS information file path
 
     //Assign TS information
     file, err := os.Open(tsinfo_file)
@@ -164,7 +164,7 @@ func main() {
 
         //Listen to the TCP port
         var err error
-        ln, err = net.Listen("tcp", ":"+cp_port)
+        ln, err = net.Listen("tcp", cp_host+":"+cp_port)
         checkError(err)
 
         logging.LogToFile("logs/"+cp_cname+time.Now().Local().Format("2006-01-02")+"_"+time.Now().Local().Format("15:04:05"))
@@ -1309,12 +1309,14 @@ func broadcastCPData() {
 //Input: Command-line Arguments
 //Output: CP port number, TS information file path
 //Function: Parse Command-line Arguments
-func parseCommandline(arg []string) (string, string) {
+func parseCommandline(arg []string) (string, string, string) {
 
+    var cp_host string //CP hostname
     var tsinfo_file string //TS information file path
     var cp_port string //CP port no.
     var e_flag = false //Exit flag
 
+    flag.StringVar(&cp_host, "h", "", "CP hostname to which to bind")
     flag.StringVar(&cp_cname, "c", "", "CP common name (required)")
     flag.StringVar(&cp_port, "p", "", "CP port number (required)")
     flag.StringVar(&tsinfo_file, "t", "ts.info", "TS information file path")
@@ -1342,7 +1344,7 @@ func parseCommandline(arg []string) (string, string) {
         os.Exit(0) //Exit
     }
 
-    return cp_port, tsinfo_file
+    return cp_host, cp_port, tsinfo_file
 }
 
 //Function: Initialize variables
