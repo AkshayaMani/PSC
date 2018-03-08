@@ -373,7 +373,7 @@ func (t *TorControl) PasswordAuthenticate() error {
 //Input: Event
 //Output: Error, Log string prepended with log type
 //Function: Register for event
-func (t *TorControl) StartCollection(event string) (error, string) {
+func (t *TorControl) StartCollection(event string, privcount_enable_flag bool) (error, string) {
 
     var log string
 
@@ -387,19 +387,22 @@ func (t *TorControl) StartCollection(event string) (error, string) {
 
     if t.state == "waiting" {
 
-        /*err := t.SendCommand("SETCONF __ReloadTorrcOnSIGHUP=0\r\n")
+        if privcount_enable_flag {
 
-        if err != nil {
+            err := t.SendCommand("SETCONF __ReloadTorrcOnSIGHUP=0\r\n")
 
-            return err, log
+            if err != nil {
+
+                return err, log
+            }
+
+            err = t.SendCommand("SETCONF EnablePrivCount=1\r\n")
+
+            if err != nil {
+
+                return err, log
+            }
         }
-
-        err = t.SendCommand("SETCONF EnablePrivCount=1\r\n")
-
-        if err != nil {
-
-            return err, log
-        }*/
 
         err := t.SendCommand("SETEVENTS " + t.event + "\r\n")
 
@@ -420,7 +423,7 @@ func (t *TorControl) StartCollection(event string) (error, string) {
 
 //Output: Error
 //Function: Unregister events
-func (t *TorControl) StopCollection() error {
+func (t *TorControl) StopCollection(privcount_enable_flag bool) error {
 
     t.has_received_event = false //Set event received flag to false
 
@@ -434,19 +437,22 @@ func (t *TorControl) StopCollection() error {
         return err
     }
 
-    /*err = t.SendCommand("SETCONF EnablePrivCount=0\r\n")
+    if privcount_enable_flag {
 
-    if err != nil {
+        err = t.SendCommand("SETCONF EnablePrivCount=0\r\n")
 
-        return err
+        if err != nil {
+
+            return err
+        }
+
+        err = t.SendCommand("SETCONF __ReloadTorrcOnSIGHUP=1\r\n")
+
+        if err != nil {
+
+            return err
+        }
     }
-
-    err = t.SendCommand("SETCONF __ReloadTorrcOnSIGHUP=1\r\n")
-
-    if err != nil {
-
-        return err
-    }*/
 
     t.state = "waiting"
 
