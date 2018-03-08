@@ -62,15 +62,17 @@ Set the PSC parameters in PSC/TS/config/Gen_Config.go:
     var cp_addr = []string{"10.176.5.24:6100", "10.176.5.25:6100"} //CP addresses
     var dp_addr = []string{"10.176.5.22:7100", "10.176.5.23:7100"} //DP addresses
     var epoch = 1 //Epoch for data collection
-    var query = "ExitSecondLevelDomainWebInitialStream"	        
-    //var query = "ExitSecondLevelDomainAlexaWebInitialStream"
-    //var query = "EntryRemoteIPAddress"
-    //var query = "EntryRemoteIPAddressCountry"
-    //var query = "EntryRemoteIPAddressAS"
+    var qname = "ExitSecondLevelDomainWebInitialStream" //Query name
+    //var qname = "ExitSecondLevelDomainAlexaWebInitialStream" //Query name
+    //var qname = "EntryRemoteIPAddress" //Query name
+    //var qname = "EntryRemoteIPAddressCountry" //Query name
+    //var qname = "EntryRemoteIPAddressAS" //Query name
     //var qlist = []string{"-1"} //Query list
     //var qlist = []string{"15169", "56203", "6939"} //Query list
     //var qlist = []string{"US", "AA"} //Query list
     var qlist []string //Query list
+    var qfile = map[string]string{"domain":"sld-Alexa-top-1m.txt"} //Filename map
+    //var qfile = map[string]string{"ipv4":"as-ipv4-coalesced-20171126.ipasn", "ipv6":"as-ipv6-20171127.ipasn"} //Filename map
     var n = int64(789592)  //No. of noise vectors
 ```
 
@@ -273,4 +275,5 @@ Note: if you specify any optional arguments, they must be all one string
     -cp   Tor control port
     -pf   Tor control hashed password file path
     -t    TS information file path
+    -pe   PrivCount enable (true/false)
 ```
