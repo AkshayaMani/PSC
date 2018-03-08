@@ -9,6 +9,13 @@ See LICENSE for licensing information
 syntax = "proto2";
 package TSmsg;
 
+message Query {
+
+  required string Name = 1;
+  map<string, string> file = 2;
+  repeated string List = 3;
+}
+
 message Config {
   required int32 SNo = 1;
   required int32 Epoch = 2;
@@ -20,8 +27,7 @@ message Config {
   repeated string DPcnames = 8;
   repeated string DPaddr = 9;
   required int64 Tsize = 10;
-  required string Query = 11;
-  repeated string QList = 12;
+  required Query Q = 11;
 }
 
 message Signal {

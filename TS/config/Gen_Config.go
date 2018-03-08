@@ -25,15 +25,17 @@ func main() {
     var cp_addr = []string{"10.176.5.24:6100", "10.176.5.25:6100"} //CP addresses
     var dp_addr = []string{"10.176.5.22:7100", "10.176.5.23:7100"} //DP addresses
     var epoch = 1 //Epoch for data collection
-    var query = "ExitSecondLevelDomainWebInitialStream"
-    //var query = "ExitSecondLevelDomainAlexaWebInitialStream"
-    //var query = "EntryRemoteIPAddress"
-    //var query = "EntryRemoteIPAddressCountry"
-    //var query = "EntryRemoteIPAddressAS"
+    var qname = "ExitSecondLevelDomainWebInitialStream" //Query name
+    //var qname = "ExitSecondLevelDomainAlexaWebInitialStream" //Query name
+    //var qname = "EntryRemoteIPAddress" //Query name
+    //var qname = "EntryRemoteIPAddressCountry" //Query name
+    //var qname = "EntryRemoteIPAddressAS" //Query name
     //var qlist = []string{"-1"} //Query list
     //var qlist = []string{"15169", "56203", "6939"} //Query list
     //var qlist = []string{"US", "AA"} //Query list
     var qlist []string //Query list
+    var qfile = map[string]string{"domain":"sld-Alexa-top-1m.txt"} //Query filename map
+    //var qfile = map[string]string{"ipv4":"as-ipv4-coalesced-20171126.ipasn", "ipv6":"as-ipv6-20171127.ipasn"} //Query filename map
     var n = int64(789592)  //No. of noise vectors
 
     //Assign PSC configuration parameters
@@ -56,10 +58,16 @@ func main() {
     copy(config.DPaddr[:], dp_addr)
 
     config.Tsize = proto.Int64(int64(b))
-    config.Query = proto.String(query)
 
-    config.QList = make([]string, len(qlist))
-    copy(config.QList[:], qlist)
+    config.Q = new(TSmsg.Query)
+    config.Q.Name = &qname
+    config.Q.File = make(map[string]string)
+    for k := range qfile {
+
+        config.Q.File[k] = qfile[k]
+    }
+    config.Q.List = make([]string, len(qlist))
+    copy(config.Q.List[:], qlist)
 
     //Write to config file
     out, err := proto.Marshal(config)
@@ -85,8 +93,9 @@ func main() {
     fmt.Println("DP common names:", config1.DPcnames)
     fmt.Println("DP IPs:", config1.DPaddr)
     fmt.Println("Table size:", *config1.Tsize)
-    fmt.Println("Query:", *config1.Query)
-    fmt.Println("Query list:", config1.QList)
+    fmt.Println("Query name:", *config1.Q.Name)
+    fmt.Println("Query file:", config1.Q.File)
+    fmt.Println("Query list:", config1.Q.List)
 }
 
 //Check Error
