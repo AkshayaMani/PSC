@@ -10,7 +10,6 @@ syntax = "proto2";
 package TSmsg;
 
 message Query {
-
   required string Name = 1;
   map<string, string> file = 2;
   repeated string List = 3;
