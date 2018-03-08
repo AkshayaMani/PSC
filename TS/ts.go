@@ -30,12 +30,9 @@ import (
 
 var no_CPs int //No.of CPs
 var no_DPs int //No. of DPs
-var b int64 //Hash table size
 var no_Expts int //No. of measurements
-var noise int64 //No. of noise bins
+var qname string //Query name
 var epoch int //Epoch
-var query string //Query name
-var qlist []string //Query list
 var cp_cnames []string //CP common names
 var dp_cnames []string //DP common names
 var cp_addr []string //CP addresses
@@ -55,6 +52,7 @@ var dp_step_no uint32 //DP Step Number
 var ts_s_no uint32 //TS session No.
 var no_dp_res int//No. of DPs responded
 var no_cp_res int//No. of CPs responded
+var config *TSmsg.Config //Configuration parameters
 var mutex = &sync.Mutex{} //Mutex to lock common client variable
 var wg = &sync.WaitGroup{} //WaitGroup to wait for all goroutines to shutdown
 
@@ -118,29 +116,8 @@ func main() {
                 ts_s_no = uint32(rnd.Int31()) //Set session no. to non-zero random number
             }
 
-            //Assign PSC configuration to send to CPs
-            config := new(TSmsg.Config)
+            //Assign TS session no.
             config.SNo = proto.Int32(int32(ts_s_no))
-            config.Epoch = proto.Int32(int32(epoch))
-            config.Noise = proto.Int64(noise)
-            config.Ncps = proto.Int32(int32(no_CPs))
-            config.CPcnames = make([]string, no_CPs)
-            config.CPaddr = make([]string, no_CPs)
-
-            copy(config.CPcnames[:], cp_cnames)
-            copy(config.CPaddr[:], cp_addr)
-
-            config.Ndps = proto.Int32(int32(no_DPs))
-            config.DPcnames = make([]string, no_DPs)
-            config.DPaddr = make([]string, no_DPs)
-            config.QList = make([]string, len(qlist))
-
-            copy(config.DPcnames[:], dp_cnames)
-            copy(config.DPaddr[:], dp_addr)
-            copy(config.QList[:], qlist)
-
-            config.Tsize = proto.Int64(int64(b))
-            config.Query = proto.String(query)
 
             //Convert to Bytes
             configbytes, _ := proto.Marshal(config)
@@ -233,11 +210,7 @@ func main() {
                         }
 
                         break loop
-
-                    default:
                 }
-
-                time.Sleep(10 * time.Millisecond)
             }
 
         } else {
@@ -575,7 +548,7 @@ func handleClients(clientconn chan net.Conn, com_name string) {
 
                         //Write to config file
                         out, _ := proto.Marshal(result)
-                        ioutil.WriteFile("result/"+query+time.Now().Local().Format("2006-01-02")+"_"+time.Now().Local().Format("15:04:05"), out, 0644)
+                        ioutil.WriteFile("result/"+qname+time.Now().Local().Format("2006-01-02")+"_"+time.Now().Local().Format("15:04:05"), out, 0644)
 
                         cp_step_no += 1 //Increment CP step no.
 
@@ -649,18 +622,13 @@ func assignConfig(config_file string) {
 
     //Read configuration file
     in, _ := ioutil.ReadFile(config_file)
-    config := &TSmsg.Config{}
+    config = &TSmsg.Config{}
     proto.Unmarshal(in, config)
 
     //Assign configuration parameters
     no_CPs = int(*config.Ncps) //No.of CPs
     no_DPs = int(*config.Ndps) //No. of DPs
     epoch = int(*config.Epoch) //Epoch
-    query = *config.Query //Query name
-    qlist = make([]string, len(config.QList)) //Query list
-    copy(qlist[:], config.QList) //Assign query list
-    noise = *config.Noise //No. of noise bins
-    b = *config.Tsize //Hash table size
     cp_cnames  = make([]string, no_CPs) //CP common names
     cp_addr = make([]string, no_CPs) //CP addresses
     copy(cp_cnames[:], config.CPcnames) //Assign CP common names
@@ -669,6 +637,7 @@ func assignConfig(config_file string) {
     dp_addr = make([]string, no_DPs) //DP addresses
     copy(dp_cnames[:], config.DPcnames) //Assign DP common names
     copy(dp_addr[:], config.DPaddr) //Assign DP addresses
+    qname = *config.Q.Name //Assign query name
 }
 
 //Function: Initialize variables
