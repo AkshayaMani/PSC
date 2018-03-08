@@ -47,7 +47,7 @@ var b int64 //Hash table size
 
 var ts_cname string //TS hostname
 var ts_addr string //TS address
-var query string //Query
+var qname string //Query
 var qlist []string //Query list
 var cp_cnames []string //CP common names
 var dp_cnames []string //DP common names
@@ -67,6 +67,7 @@ var cs [][]abstract.Scalar //Cipher share
 var mutex = &sync.Mutex{} //Mutex to lock common client variable
 var wg = &sync.WaitGroup{} //WaitGroup to wait for all goroutines to shutdown
 
+var privcount_enable_flag bool //PrivCount enable flag
 var torControl = &goControlTor.TorControl{} //Tor control port connection
 var domain_map = map[string]bool{} //Domain map
 var ipv4asnmap = map[string]map[string]string{} //IPv4 to ASN map
@@ -87,7 +88,7 @@ func main() {
 
     logging.LogToFile("logs/Connection"+time.Now().Local().Format("2006-01-02")+"_"+time.Now().Local().Format("15:04:05"))
 
-    dp_host, dp_port, control_addr, control_port, passwd_file, tsinfo_file := parseCommandline(os.Args) //Parse DP hostname, common name & port number, Tor control address & port no., hashed password file path, and TS information file path
+    dp_host, dp_port, control_addr, control_port, passwd_file, tsinfo_file := parseCommandline(os.Args) //Parse DP hostname, common name & port number, Tor control address & port no., hashed password file path, TS information file path an PrivCount enable flag
 
     //Assign TS information
     file, err := os.Open(tsinfo_file)
@@ -212,13 +213,13 @@ func main() {
 
                     if len(event) != 0 {
 
-                        if event[0] == q_to_e[query] {
+                        if event[0] == q_to_e[qname] {
 
-                            if q_to_e[query] == "PRIVCOUNT_STREAM_ENDED" {
+                            if q_to_e[qname] == "PRIVCOUNT_STREAM_ENDED" {
 
                                 handle_stream_event(event[1:])
 
-                            } else if q_to_e[query] == "PRIVCOUNT_CONNECTION_CLOSE" {
+                            } else if q_to_e[qname] == "PRIVCOUNT_CONNECTION_CLOSE" {
 
                                 handle_connection_event(event[1:])
                             }
@@ -244,11 +245,7 @@ func main() {
                     }
 
                     break loop
-
-                default:
             }
-
-            time.Sleep(10 * time.Millisecond)
         }
     }
 }
@@ -290,54 +287,6 @@ func handleTS(conn net.Conn) {
             proto.Unmarshal(buf, config) //Parse TS configuration
 
             assignConfig(config) //Assign configuration
-
-            if query == "ExitSecondLevelDomainAlexaWebInitialStream" {
-
-                var no_of_domains int //No. of domains
-
-                if len(qlist) == 1 || len(qlist) == 0 {
-
-                    if len(qlist) == 0 {
-
-                        no_of_domains = -1
-
-                    } else {
-
-                        var err error //Error
-                        no_of_domains, err = strconv.Atoi(qlist[0]) //Convert to integer
-
-                        checkError(err) //Check error
-                    }
-
-                } else {
-
-                    checkError(fmt.Errorf("%s has invalid list", query)) //Invalid query list
-                }
-
-                domain_list := match.LoadDomainList("data/sld-Alexa-top-1m.txt", no_of_domains)
-
-                domain_map = match.ExactMatchCreateMap(domain_list)
-
-            } else if query == "EntryRemoteIPAddressAS" {
-
-                if len(qlist) == 0 {
-
-                    query = "EntryRemoteIPAddress" 
-
-                } else {
-
-                    ipv4asnmap = asn.CreateIPASNMap("data/as-ipv4-coalesced-20171126.ipasn", 4)
-                    ipv6asnmap = asn.CreateIPASNMap("data/as-ipv6-20171127.ipasn", 6)
-                } 
-
-            } else if query == "EntryRemoteIPAddressCountry" {
-
-                if len(qlist) == 0 {
-
-                    query = "EntryRemoteIPAddress"
-
-                }
-            }
 
             logging.Info.Println("Sending TS signal. Step No.", step_no)
             sendTSSignal(ts_s_no+step_no) //Send signal to TS
@@ -509,7 +458,7 @@ func collectData () {
 
     mutex.Lock() //Lock mutex
 
-    err, log := torControl.StartCollection(q_to_e[query])
+    err, log := torControl.StartCollection(q_to_e[qname], privcount_enable_flag)
     checkError(err)
 
     mutex.Unlock() //Unlock mutex
@@ -536,7 +485,7 @@ func collectData () {
 
     mutex.Lock() //Lock mutex
 
-    err = torControl.StopCollection()
+    err = torControl.StopCollection(privcount_enable_flag)
     checkError(err)
 
     d_flag = true //Set data collection finish flag
@@ -633,11 +582,11 @@ func handle_stream_event(event []string) {
 
         fld, _ := publicsuffix.EffectiveTLDPlusOne(strings.ToLower(remote_host))
 
-        if query == "ExitSecondLevelDomainWebInitialStream" && fld != "" {
+        if qname == "ExitSecondLevelDomainWebInitialStream" && fld != "" {
 
            incrementCounter(fld) //Increment counter
 
-        } else if query == "ExitSecondLevelDomainAlexaWebInitialStream" && fld != "" {
+        } else if qname == "ExitSecondLevelDomainAlexaWebInitialStream" && fld != "" {
 
             if exact_match := match.ExactMatch(domain_map, fld); exact_match != "" {
 
@@ -659,11 +608,11 @@ func handle_connection_event(event []string) {
         eventmap[tmp[0]] = tmp[1]
     }
 
-    if query == "EntryRemoteIPAddress" {
+    if qname == "EntryRemoteIPAddress" {
 
         incrementCounter(eventmap["RemoteIPAddress"]) //Increment counter
 
-    } else if query == "EntryRemoteIPAddressCountry" {
+    } else if qname == "EntryRemoteIPAddressCountry" {
 
         if eventmap["RemoteCountryCode"] != "!!" && eventmap["RemoteCountryCode"] != "??" { 
 
@@ -673,7 +622,7 @@ func handle_connection_event(event []string) {
             }
         }
 
-    } else if query == "EntryRemoteIPAddressAS" {
+    } else if qname == "EntryRemoteIPAddressAS" {
 
         var asno string //ASN
 
@@ -729,6 +678,7 @@ func parseCommandline(arg []string) (string, string, string, string, string, str
     flag.StringVar(&control_port, "cp", "9051", "Tor control port")
     flag.StringVar(&passwd_file, "pf", "control_password.txt", "Tor control hashed password file path")
     flag.StringVar(&tsinfo_file, "t", "ts.info", "TS information file path")
+    flag.BoolVar(&privcount_enable_flag, "pe", false, "PrivCount enable")
     flag.Parse()
 
     if dp_cname == "" || dp_port == "" {
@@ -793,25 +743,73 @@ func assignConfig(config *TSmsg.Config) {
     ts_s_no = uint32(*config.SNo) //TS session no.
     epoch = int(*config.Epoch) //Epoch
     no_CPs = *config.Ncps //No. of CPs
-    query = *config.Query //Query
+    qname = *config.Q.Name //Query name
 
-    if _, ok := q_to_e[query]; !ok { //Check if query is valid
+    if _, ok := q_to_e[qname]; !ok { //Check if query is valid
 
-        checkError(fmt.Errorf("%s is not a valid Query", query))
+        checkError(fmt.Errorf("%s is not a valid Query", qname))
 
     } else {
 
-        if query == "ExitSecondLevelDomainWebInitialStream" || query == "EntryRemoteIPAddress" {
+        if qname == "ExitSecondLevelDomainWebInitialStream" || qname == "EntryRemoteIPAddress" {
 
-            if len(config.QList) != 0 {
+            if len(config.Q.List) != 0 {
 
-                checkError(fmt.Errorf("%s has invalid list", query))
+                checkError(fmt.Errorf("%s has invalid list", qname))
             }
 
         } else {
 
-            qlist = make([]string, len(config.QList)) //Query list
-            copy(qlist[:], config.QList) //Assign Query list
+            qlist = make([]string, len(config.Q.List)) //Query list
+            copy(qlist[:], config.Q.List) //Assign Query list
+        }
+    }
+
+    if qname == "ExitSecondLevelDomainAlexaWebInitialStream" {
+
+        var no_of_domains int //No. of domains
+
+        if len(qlist) == 1 || len(qlist) == 0 {
+
+            if len(qlist) == 0 {
+
+                no_of_domains = -1
+
+            } else {
+
+                var err error //Error
+                no_of_domains, err = strconv.Atoi(qlist[0]) //Convert to integer
+
+                checkError(err) //Check error
+            }
+
+        } else {
+
+            checkError(fmt.Errorf("%s has invalid list", qname)) //Invalid query list
+        }
+
+        domain_list := match.LoadDomainList("data/" + config.Q.File["domain"], no_of_domains)
+
+        domain_map = match.ExactMatchCreateMap(domain_list)
+
+    } else if qname == "EntryRemoteIPAddressAS" {
+
+        if len(qlist) == 0 {
+
+            qname = "EntryRemoteIPAddress" 
+
+        } else {
+
+            ipv4asnmap = asn.CreateIPASNMap("data/" + config.Q.File["ipv4"], 4)
+            ipv6asnmap = asn.CreateIPASNMap("data/" + config.Q.File["ipv6"], 6)
+        } 
+
+    } else if qname == "EntryRemoteIPAddressCountry" {
+
+        if len(qlist) == 0 {
+
+            qname = "EntryRemoteIPAddress"
+
         }
     }
 
