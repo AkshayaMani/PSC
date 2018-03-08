@@ -291,11 +291,7 @@ func main() {
                     }
 
                     break loop
-
-                default:
             }
-
-            time.Sleep(10 * time.Millisecond)
         }
     }
 }
