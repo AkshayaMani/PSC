@@ -497,7 +497,6 @@ func torControlPortReceive(torControl *goControlTor.TorControl) {
 
         } else {
 
-
             event, _, err, log := torControl.CommandParse(msg) //Print command
             checkError(err)
 
