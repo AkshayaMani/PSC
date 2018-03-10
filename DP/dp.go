@@ -186,46 +186,6 @@ func main() {
                         conn.Close() //Close connection
                     }
 
-                case msg := <- message:
-
-                    mutex.Lock() //Lock mutex
-
-                    event, _, err, log := torControl.CommandParse(msg) //Print command
-                    checkError(err)
-
-                    mutex.Unlock() //Unlock mutex
-
-                    if log != "" { //If log set
-
-                        if strings.HasPrefix(log, "Warning:") {
-
-                            logging.Warning.Println(strings.TrimPrefix(log, "Warning:"))
-
-                        } else if strings.HasPrefix(log, "Info:") {
-
-                            logging.Info.Println(strings.TrimPrefix(log, "Info:"))
-
-                        } else {
-
-                            checkError(fmt.Errorf("%s is not a valid log", log))
-                        }
-                    }
-
-                    if len(event) != 0 {
-
-                        if event[0] == q_to_e[qname] {
-
-                            if q_to_e[qname] == "PRIVCOUNT_STREAM_ENDED" {
-
-                                handle_stream_event(event[1:])
-
-                            } else if q_to_e[qname] == "PRIVCOUNT_CONNECTION_CLOSE" {
-
-                                handle_connection_event(event[1:])
-                            }
-                        }
-                    }
-
                 case <-finish:
 
                     torControl.SetTimeOut(time.Now().Add(0)) //Immediately time out
@@ -537,7 +497,40 @@ func torControlPortReceive(torControl *goControlTor.TorControl) {
 
         } else {
 
-            message <- msg //Send message to parse
+
+            event, _, err, log := torControl.CommandParse(msg) //Print command
+            checkError(err)
+
+            if log != "" { //If log set
+
+                if strings.HasPrefix(log, "Warning:") {
+
+                    logging.Warning.Println(strings.TrimPrefix(log, "Warning:"))
+
+                } else if strings.HasPrefix(log, "Info:") {
+
+                    logging.Info.Println(strings.TrimPrefix(log, "Info:"))
+
+                } else {
+
+                    checkError(fmt.Errorf("%s is not a valid log", log))
+                }
+            }
+
+            if len(event) != 0 {
+
+                if event[0] == q_to_e[qname] {
+
+                    if q_to_e[qname] == "PRIVCOUNT_STREAM_ENDED" {
+
+                        handle_stream_event(event[1:])
+
+                    } else if q_to_e[qname] == "PRIVCOUNT_CONNECTION_CLOSE" {
+
+                        handle_connection_event(event[1:])
+                    }
+                }
+            }
         }
     }
 }
