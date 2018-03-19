@@ -1,14 +1,14 @@
 package par
 
 import(
-    "gopkg.in/dedis/crypto.v0/abstract"
-    "gopkg.in/dedis/crypto.v0/proof"
+    "github.com/dedis/kyber"
+    "github.com/dedis/kyber/proof"
 )
 
 // Map over a slices of Elgamal Ciphers with the given parallel for-loop.
-func MapElgamalCiphers(loop ParallelForLoop, f func([2]abstract.Point, [2]abstract.Point, abstract.Point) ([2]abstract.Point, [2]abstract.Point, proof.Prover), x [][2]abstract.Point, y [][2]abstract.Point, Y abstract.Point, n int) ([][2]abstract.Point, [][2]abstract.Point, []proof.Prover) {
-        xbar := make([][2]abstract.Point, n)
-        ybar := make([][2]abstract.Point, n)
+func MapElgamalCiphers(loop ParallelForLoop, f func([2]kyber.Point, [2]kyber.Point, kyber.Point) ([2]kyber.Point, [2]kyber.Point, proof.Prover), x [][2]kyber.Point, y [][2]kyber.Point, Y kyber.Point, n int) ([][2]kyber.Point, [][2]kyber.Point, []proof.Prover) {
+        xbar := make([][2]kyber.Point, n)
+        ybar := make([][2]kyber.Point, n)
         proof := make([]proof.Prover, n)
 
         loop(0, uint(n), 1, func(id uint) {
@@ -19,7 +19,7 @@ func MapElgamalCiphers(loop ParallelForLoop, f func([2]abstract.Point, [2]abstra
 }
 
 // Convenience function: use MapElgamalCiphers with a chunking parallel for loop.
-func MapElgamalCiphersChunked(f func([2]abstract.Point, [2]abstract.Point, abstract.Point) ([2]abstract.Point, [2]abstract.Point, proof.Prover), x [][2]abstract.Point, y [][2]abstract.Point, Y abstract.Point, n int) ([][2]abstract.Point, [][2]abstract.Point, []proof.Prover) {
+func MapElgamalCiphersChunked(f func([2]kyber.Point, [2]kyber.Point, kyber.Point) ([2]kyber.Point, [2]kyber.Point, proof.Prover), x [][2]kyber.Point, y [][2]kyber.Point, Y kyber.Point, n int) ([][2]kyber.Point, [][2]kyber.Point, []proof.Prover) {
         return MapElgamalCiphers(ForChunked, f, x, y, Y, n)
 }
 

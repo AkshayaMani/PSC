@@ -10,13 +10,14 @@ package main
 
 import (
     "bufio"
+    "bytes"
     "crypto/tls"
     "crypto/x509"
     "encoding/binary"
     "flag"
     "fmt"
-    "gopkg.in/dedis/crypto.v0/abstract"
-    "gopkg.in/dedis/crypto.v0/nist"
+    "github.com/dedis/kyber"
+    "github.com/dedis/kyber/group/edwards25519"
     "github.com/golang/protobuf/proto"
     "golang.org/x/net/publicsuffix"
     "hash/fnv"
@@ -61,9 +62,9 @@ var ts_config_flag bool //TS configuration flag
 var ln net.Listener //Server listener
 var finish chan bool //Channel to send finish flag
 var clients chan net.Conn //Channel to handle simultaneous client connections
-var k []abstract.Scalar //CP-DP Keys
-var c []abstract.Scalar //Ciphers
-var cs [][]abstract.Scalar //Cipher share
+var k []kyber.Scalar //CP-DP Keys
+var c []kyber.Scalar //Ciphers
+var cs [][]kyber.Scalar //Cipher share
 var mutex = &sync.Mutex{} //Mutex to lock common client variable
 var wg = &sync.WaitGroup{} //WaitGroup to wait for all goroutines to shutdown
 
@@ -267,8 +268,8 @@ func handleTS(conn net.Conn) {
 
                 if *sig.SNo == int32(ts_s_no+step_no) { //Check TS step no.
 
-                    suite := nist.NewAES128SHA256P256()
-                    rand := suite.Cipher(abstract.RandomKey)
+                    suite := edwards25519.NewBlakeSHA256Ed25519()
+                    rand := suite.RandomStream()
 
                     if step_no == 1 { //If step no. 1
 
@@ -285,7 +286,11 @@ func handleTS(conn net.Conn) {
                             for j := int64(0); j < b; j++ {
 
                                 k[j] = suite.Scalar().Pick(rand) //Choose random keys
-                                resp.M[j] = k[j].Bytes() //Assign CP-DP keys
+
+                                //Convert to bytes
+                                var tb bytes.Buffer //Temporary buffer
+                                _,_ = k[j].MarshalTo(&tb)
+                                resp.M[j] = tb.Bytes() //Assign CP-DP keys
 
                                 c[j] = suite.Scalar().Add(c[j], k[j]) //Add keys to each counter
                             }
@@ -335,7 +340,10 @@ func handleTS(conn net.Conn) {
                             //Iterate over hash table
                             for j := int64(0); j < b; j++ {
 
-                                resp.M[j] = cs[j][i].Bytes()
+                                //Convert to bytes
+                                var tb bytes.Buffer //Temporary buffer
+                                _,_ = cs[j][i].MarshalTo(&tb)
+                                resp.M[j] = tb.Bytes() //Assign masked data share
                             }
 
                             //Convert to bytes
@@ -641,8 +649,8 @@ func handle_connection_event(event []string) {
 //Function: Hash and increment counter
 func incrementCounter(event string) {
 
-    suite := nist.NewAES128SHA256P256()
-    rand := suite.Cipher(abstract.RandomKey)
+    suite := edwards25519.NewBlakeSHA256Ed25519()
+    rand := suite.RandomStream()
 
     h := fnv.New32a()
     h.Write([]byte(strings.ToLower(event)))
@@ -820,17 +828,17 @@ func assignConfig(config *TSmsg.Config) {
 
     b = *config.Tsize //Hash table size
 
-    k = make([]abstract.Scalar, b) //CP-DP Keys
-    c = make([]abstract.Scalar, b) //Ciphers
-    cs = make([][]abstract.Scalar, b) //Cipher shares
+    k = make([]kyber.Scalar, b) //CP-DP Keys
+    c = make([]kyber.Scalar, b) //Ciphers
+    cs = make([][]kyber.Scalar, b) //Cipher shares
 
-    suite := nist.NewAES128SHA256P256()
+    suite := edwards25519.NewBlakeSHA256Ed25519()
 
     //Iterate over the hashtable
     for i := int64(0); i < b; i++ {
 
         c[i] = suite.Scalar().Zero() //Initialize with zero
-        cs[i] = make([]abstract.Scalar, no_CPs) //Initialize cipher shares list
+        cs[i] = make([]kyber.Scalar, no_CPs) //Initialize cipher shares list
     }
 
     //Iterate over the hashtable

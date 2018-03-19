@@ -17,13 +17,12 @@ import (
     "errors"
     "flag"
     "fmt"
-    "gopkg.in/dedis/crypto.v0/abstract"
-    "gopkg.in/dedis/crypto.v0/hash"
-    "gopkg.in/dedis/crypto.v0/nist"
-    "gopkg.in/dedis/crypto.v0/proof"
-    "gopkg.in/dedis/crypto.v0/random"
-    "gopkg.in/dedis/crypto.v0/shuffle"
-    "gopkg.in/dedis/crypto.v0/sign"
+    "github.com/dedis/kyber"
+    "github.com/dedis/kyber/group/edwards25519"
+    "github.com/dedis/kyber/proof"
+    "github.com/dedis/kyber/proof/dleq"
+    "github.com/dedis/kyber/shuffle"
+    "github.com/dedis/kyber/sign/schnorr"
     "github.com/golang/protobuf/proto"
     "io"
     "io/ioutil"
@@ -46,15 +45,15 @@ import (
 
 // ReRandomizeProof represents a NIZK proof.
 type ReRandomizeProof struct {
-    C abstract.Scalar //Challenge
-    R1 abstract.Scalar //Response 1
-    R2 abstract.Scalar //Response 2
-    T1 abstract.Point  // public commitment with respect to base point A
-    T2 abstract.Point  // public commitment with respect to base point B
+    C kyber.Scalar //Challenge
+    R1 kyber.Scalar //Response 1
+    R2 kyber.Scalar //Response 2
+    T1 kyber.Point  // public commitment with respect to base point A
+    T2 kyber.Point  // public commitment with respect to base point B
 }
 
-var suite = nist.NewAES128SHA256P256() //Cipher suite
-var pseudorand abstract.Cipher //For Randomness
+var suite = edwards25519.NewBlakeSHA256Ed25519() //Cipher suite
+var pseudorand = suite.RandomStream() //For Randomness
 var no_CPs int32 //No.of CPs
 var no_DPs int32 //No. of DPs
 var b int64 //Hash table size
@@ -80,21 +79,21 @@ var cp_session_flag bool //CP session flag
 var ln net.Listener //Server listener
 var finish chan bool //Channel to send finish flag
 var clients chan net.Conn //Channel to handle simultaneous client connections
-var x abstract.Scalar //CP private key
-var y []abstract.Point //CP ElGamal public key list
+var x kyber.Scalar //CP private key
+var y []kyber.Point //CP ElGamal public key list
 var pub = new(Schnorrkey.Pub) //CP ElGamal public key in bytes
-var Y = nist.NewAES128SHA256P256().Point().Null() //Compound public key
-var k_j []abstract.Scalar //Key Share
-var c_j []abstract.Scalar //Message Share
+var Y = suite.Point().Null() //Compound public key
+var k_j []kyber.Scalar //Key Share
+var c_j []kyber.Scalar //Message Share
 var b_j [][]byte //Broadcasted Message List
-var nr [][2]abstract.Point //Noise ElGamal Blinding Factors
-var nc [][2]abstract.Point //Noise ElGamal Ciphers
-var nr_o [][2]abstract.Point //Shuffled Noise ElGamal Blinding Factors
-var nc_o [][2]abstract.Point //Shuffled Noise ElGamal Ciphers
-var R []abstract.Point //Product of all CP ElGamal Blinding Factors
-var C []abstract.Point //Product of all CP ElGamal Ciphers
-var R_O []abstract.Point //Shuffled ElGamal Blinding Factors
-var C_O []abstract.Point //Shuffled ElGamal Ciphers
+var nr [][2]kyber.Point //Noise ElGamal Blinding Factors
+var nc [][2]kyber.Point //Noise ElGamal Ciphers
+var nr_o [][2]kyber.Point //Shuffled Noise ElGamal Blinding Factors
+var nc_o [][2]kyber.Point //Shuffled Noise ElGamal Ciphers
+var R []kyber.Point //Product of all CP ElGamal Blinding Factors
+var C []kyber.Point //Product of all CP ElGamal Ciphers
+var R_O []kyber.Point //Shuffled ElGamal Blinding Factors
+var C_O []kyber.Point //Shuffled ElGamal Ciphers
 var cp_res_byte []byte //CP Response in bytes
 var mutex = &sync.Mutex{} //Mutex to lock common client variable
 var wg = &sync.WaitGroup{} //WaitGroup to wait for all goroutines to shutdown
@@ -436,7 +435,7 @@ func handleCPs(cpconn chan net.Conn, com_name string) {
 
                 //Verify Proof
                 rep := proof.Rep("X", "x", "B")
-                public := map[string]abstract.Point{"B": suite.Point().Base(), "X": schnorr_pub}
+                public := map[string]kyber.Point{"B": suite.Point().Base(), "X": schnorr_pub}
                 verifier := rep.Verifier(suite, public)
                 err := proof.HashVerify(suite, strconv.Itoa(int(cp_s_no+step_no-2)), verifier, cp_resp.Proof[0])
 
@@ -575,7 +574,7 @@ func handleCPs(cpconn chan net.Conn, com_name string) {
 
                     //Verify Proof
                     rep := proof.Rep("X", "x", "B")
-                    public := map[string]abstract.Point{"B": suite.Point().Base(), "X": y[cp_bcast]}
+                    public := map[string]kyber.Point{"B": suite.Point().Base(), "X": y[cp_bcast]}
                     verifier := rep.Verifier(suite, public)
                     err := proof.HashVerify(suite, strconv.Itoa(int(cp_s_no+step_no-2)), verifier, cp_resp.Proof[0])
 
@@ -666,7 +665,7 @@ func handleCPs(cpconn chan net.Conn, com_name string) {
 
                         //Verify Proof
                         rep := proof.Rep("X", "x", "B")
-                        public := map[string]abstract.Point{"B": suite.Point().Base(), "X": tp}
+                        public := map[string]kyber.Point{"B": suite.Point().Base(), "X": tp}
                         verifier := rep.Verifier(suite, public)
                         err := proof.HashVerify(suite, strconv.Itoa(int(cp_s_no+step_no-2))+strconv.Itoa(int(i)), verifier, cp_resp.Proof[i])
 
@@ -781,7 +780,7 @@ func handleCPs(cpconn chan net.Conn, com_name string) {
 
                 } else if step_no == 10 { //If Step No. 10
 
-                    prf := make([]*proof.DLEQProof, b+n)
+                    prf := make([]*dleq.Proof, b+n)
                     tmp := bytes.NewReader(cp_resp.Proof[0])
                     suite.Read(tmp, prf)
 
@@ -923,14 +922,19 @@ func broadcastCPData() {
 
             //Generate Schnorr public key pair
             schnorr_priv := suite.Scalar().Pick(pseudorand) //CP Schnorr private key
-            schnorr_pub := suite.Point().Mul(nil, schnorr_priv) //CP Schnorr public key
+            schnorr_pub := suite.Point().Mul(schnorr_priv, nil) //CP Schnorr public key
 
             //Schnorr key pair in bytes
             priv_bytes := new(Schnorrkey.Priv)
             pub_bytes := new(Schnorrkey.Pub)
 
-            //Convert to bytes
-            priv_bytes.X = schnorr_priv.Bytes()
+            //Convert to private key to bytes
+            tb.Reset() //Buffer Reset
+            _,_ = schnorr_priv.MarshalTo(&tb)
+            priv_bytes.X = make([]byte, len(tb.Bytes()))
+            copy(priv_bytes.X[:], tb.Bytes())
+
+            //Convert to public key to bytes
             tb.Reset() //Buffer Reset
             _,_ = schnorr_pub.MarshalTo(&tb)
             pub_bytes.Y = make([]byte, len(tb.Bytes()))
@@ -952,10 +956,10 @@ func broadcastCPData() {
 
             //Create Proof
             rep := proof.Rep("X", "x", "B")
-            secret := map[string]abstract.Scalar{"x": schnorr_priv}
-            public := map[string]abstract.Point{"B": suite.Point().Base(), "X": schnorr_pub}
+            secret := map[string]kyber.Scalar{"x": schnorr_priv}
+            public := map[string]kyber.Point{"B": suite.Point().Base(), "X": schnorr_pub}
             prover := rep.Prover(suite, secret, public, nil)
-            prf, _ := proof.HashProve(suite, strconv.Itoa(int(cp_s_no+step_no-2)), pseudorand, prover)
+            prf, _ := proof.HashProve(suite, strconv.Itoa(int(cp_s_no+step_no-2)), prover)
             resp.Proof[0] = make([]byte, len(prf))
             copy(resp.Proof[0][:], prf)
 
@@ -980,10 +984,10 @@ func broadcastCPData() {
 
             //Create Proof
             rep := proof.Rep("X", "x", "B")
-            secret := map[string]abstract.Scalar{"x": x}
-            public := map[string]abstract.Point{"B": suite.Point().Base(), "X": y[cp_no]}
+            secret := map[string]kyber.Scalar{"x": x}
+            public := map[string]kyber.Point{"B": suite.Point().Base(), "X": y[cp_no]}
             prover := rep.Prover(suite, secret, public, nil)
-            prf, _ := proof.HashProve(suite, strconv.Itoa(int(cp_s_no+step_no-2)), pseudorand, prover)
+            prf, _ := proof.HashProve(suite, strconv.Itoa(int(cp_s_no+step_no-2)), prover)
             resp.Proof[0] = make([]byte, len(prf))
             copy(resp.Proof[0][:], prf)
 
@@ -1031,7 +1035,7 @@ func broadcastCPData() {
                 resp.C[(2*i)+1] = make([]byte, len(tb.Bytes()))
                 copy(resp.C[(2*i)+1][:], tb.Bytes()) //Convert to bytes
 
-                prf, _ := proof.HashProve(suite, strconv.Itoa(int(cp_s_no+step_no-2))+strconv.Itoa(int(i)), pseudorand, prover[i])
+                prf, _ := proof.HashProve(suite, strconv.Itoa(int(cp_s_no+step_no-2))+strconv.Itoa(int(i)), prover[i])
                 resp.Proof[i] = make([]byte, len(prf))
                 copy(resp.Proof[i][:], prf)
             }
@@ -1061,8 +1065,8 @@ func broadcastCPData() {
             resp.C = make([][]byte, b)
             resp.Proof = make([][]byte, b)
 
-            r := make([]abstract.Point, b) //List of ElGamal Blinding Factors
-            c := make([]abstract.Point, b) //List of ElGamal Ciphers
+            r := make([]kyber.Point, b) //List of ElGamal Blinding Factors
+            c := make([]kyber.Point, b) //List of ElGamal Ciphers
 
             //Iterate over all Counters
             for i := int64(0); i < b; i++ {
@@ -1070,15 +1074,15 @@ func broadcastCPData() {
                 //Set CP Response to Broadcast ElGamal Ciphertext of Message Shares
                 tmp.Pick(pseudorand)
                 tb.Reset() //Buffer Reset
-                r[i] = suite.Point().Mul(nil, tmp)
+                r[i] = suite.Point().Mul(tmp, nil)
                 R[i].Add(R[i], r[i]) //Multiply ElGamal Bllinding Factors
                 _,_ = r[i].MarshalTo(&tb)
                 resp.R[i] = make([]byte, len(tb.Bytes()))
                 copy(resp.R[i][:], tb.Bytes()) //Convert to bytes
 
                 tb.Reset() //Buffer Reset
-                c[i] = suite.Point().Mul(Y, tmp)
-                c[i].Add(c[i], suite.Point().Mul(nil, c_j[i]))
+                c[i] = suite.Point().Mul(tmp, Y)
+                c[i].Add(c[i], suite.Point().Mul(c_j[i], nil))
                 C[i].Add(C[i], c[i]) //Multiply ElGamal Ciphers
                 _,_ = c[i].MarshalTo(&tb)
                 resp.C[i] = make([]byte, len(tb.Bytes()))
@@ -1086,10 +1090,10 @@ func broadcastCPData() {
 
                 //Create Proof
                 rep := proof.Rep("X", "x", "B")
-                secret := map[string]abstract.Scalar{"x": tmp}
-                public := map[string]abstract.Point{"B": suite.Point().Base(), "X": r[i]}
+                secret := map[string]kyber.Scalar{"x": tmp}
+                public := map[string]kyber.Point{"B": suite.Point().Base(), "X": r[i]}
                 prover := rep.Prover(suite, secret, public, nil)
-                prf, _ := proof.HashProve(suite, strconv.Itoa(int(cp_s_no+step_no-2))+strconv.Itoa(int(i)), pseudorand, prover)
+                prf, _ := proof.HashProve(suite, strconv.Itoa(int(cp_s_no+step_no-2))+strconv.Itoa(int(i)), prover)
                 resp.Proof[i] = make([]byte, len(prf))
                 copy(resp.Proof[i][:], prf)
             }
@@ -1109,7 +1113,7 @@ func broadcastCPData() {
             resp.C = make([][]byte, b+n)
             resp.Proof = make([][]byte, 1)
 
-            prf, _ := proof.HashProve(suite, strconv.Itoa(int(cp_s_no+step_no-2)), pseudorand, prover)
+            prf, _ := proof.HashProve(suite, strconv.Itoa(int(cp_s_no+step_no-2)), prover)
             resp.Proof[0] = make([]byte, len(prf))
             copy(resp.Proof[0][:], prf)
 
@@ -1139,8 +1143,8 @@ func broadcastCPData() {
 
         } else if step_no == 9 { //If Step Number is 9
 
-            s := make([]abstract.Scalar, b+n) //Randomness for Re-Encryption
-            q := make([]abstract.Scalar, b+n) //Randomness for Re-Randomization
+            s := make([]kyber.Scalar, b+n) //Randomness for Re-Encryption
+            q := make([]kyber.Scalar, b+n) //Randomness for Re-Randomization
 
             //Iterate over all Counters
             for i := int64(0); i < b+n; i++ {
@@ -1192,8 +1196,8 @@ func broadcastCPData() {
 
         }  else if step_no == 10 { //If Step Number is 10
 
-            u := make([]abstract.Scalar, b+n) //Secret for Decryption
-            p := make([]abstract.Point, b+n) //Base Vector
+            u := make([]kyber.Scalar, b+n) //Secret for Decryption
+            p := make([]kyber.Point, b+n) //Base Vector
 
             //Iterate over all Counters
             for i := int64(0); i < b+n; i++ {
@@ -1201,7 +1205,7 @@ func broadcastCPData() {
                 u[i] = suite.Scalar().Set(x) //Set Secret for Decryption
                 p[i] = suite.Point().Base()
             }
-            prf, _, Ybar, _ := proof.NewDLEQProofBatch(suite, p, R, u) //Decryption
+            prf, _, Ybar, _ := dleq.NewDLEQProofBatch(suite, p, R, u) //Decryption
 
             //Assign to Output Vector and Convert to Bytes
             resp.R = make([][]byte, b+n)
@@ -1348,8 +1352,8 @@ func parseCommandline(arg []string) (string, string, string) {
 //Function: Initialize variables
 func initValues() {
 
-    suite = nist.NewAES128SHA256P256() //Cipher suite
-    pseudorand = suite.Cipher(abstract.RandomKey) //For randomness
+    suite = edwards25519.NewBlakeSHA256Ed25519() //Cipher suite
+    pseudorand = suite.RandomStream() //For Randomness
     no_CPs = 0 //No.of CPs
     no_DPs = 0 //No. of DPs
     b = 0 //Hash table size
@@ -1372,10 +1376,10 @@ func initValues() {
     ln = nil //Server listener
     finish = make(chan bool) //Channel to send finish flag
     clients = make(chan net.Conn) //Channel to handle simultaneous client connections
-    x = nist.NewAES128SHA256P256().Scalar().Zero() //CP private key
+    x = suite.Scalar().Zero() //CP private key
     y = nil //CP ElGamal public key list
     pub = new(Schnorrkey.Pub) //CP ElGamal public key in bytes
-    Y = nist.NewAES128SHA256P256().Point().Null() //Compound public key
+    Y = suite.Point().Null() //Compound public key
     k_j = nil //Key share
     c_j = nil //Message share
     b_j = nil //Broadcasted message list
@@ -1415,18 +1419,18 @@ func assignConfig(config *TSmsg.Config) {
 
     b = *config.Tsize //Hash table size
 
-    y = make([]abstract.Point, no_CPs) //Public Key List
-    k_j = make([]abstract.Scalar, b) //Key Share
-    c_j = make([]abstract.Scalar, b) //Message Share
+    y = make([]kyber.Point, no_CPs) //Public Key List
+    k_j = make([]kyber.Scalar, b) //Key Share
+    c_j = make([]kyber.Scalar, b) //Message Share
     b_j = make([][]byte, no_CPs - 1) //Broadcasted Message List
-    nr = make([][2]abstract.Point, n) //Noise ElGamal Blinding Factors
-    nc = make([][2]abstract.Point, n) //Noise ElGamal Ciphers
-    nr_o = make([][2]abstract.Point, n) //Shuffled Noise ElGamal Blinding Factors
-    nc_o = make([][2]abstract.Point, n) //Shuffled Noise ElGamal Ciphers
-    R = make([]abstract.Point, b+n) //Product of all CP ElGamal Blinding Factors
-    C = make([]abstract.Point, b+n) //Product of all CP ElGamal Ciphers
-    R_O = make([]abstract.Point, b+n) //Shuffled ElGamal Blinding Factors
-    C_O = make([]abstract.Point, b+n) //Shuffled ElGamal Ciphers
+    nr = make([][2]kyber.Point, n) //Noise ElGamal Blinding Factors
+    nc = make([][2]kyber.Point, n) //Noise ElGamal Ciphers
+    nr_o = make([][2]kyber.Point, n) //Shuffled Noise ElGamal Blinding Factors
+    nc_o = make([][2]kyber.Point, n) //Shuffled Noise ElGamal Ciphers
+    R = make([]kyber.Point, b+n) //Product of all CP ElGamal Blinding Factors
+    C = make([]kyber.Point, b+n) //Product of all CP ElGamal Ciphers
+    R_O = make([]kyber.Point, b+n) //Shuffled ElGamal Blinding Factors
+    C_O = make([]kyber.Point, b+n) //Shuffled ElGamal Ciphers
 
     cp_no = 0 //CP Number
 
@@ -1441,8 +1445,8 @@ func assignConfig(config *TSmsg.Config) {
     }
 
     x = suite.Scalar().Pick(pseudorand) //CP private key
-    y[cp_no] = suite.Point().Mul(nil, x) //CP ElGamal public key
-    Y = Y.Mul(nil, x) //Compound Public Key
+    y[cp_no] = suite.Point().Mul(x, nil) //CP ElGamal public key
+    Y = Y.Mul(x, nil) //Compound Public Key
 
     //Convert CP ElGamal key pair to bytes
     var tb bytes.Buffer //Temporary Buffer
@@ -1591,7 +1595,7 @@ func broadcastData(step_no uint32, data []byte) {
     binary.BigEndian.PutUint32(b_s[1:], step_no) //Set Step Number
 
     //Sign Message
-    sign_msg, _ := sign.Schnorr(suite, x, data)
+    sign_msg, _ := schnorr.Sign(suite, x, data)
     l := make([]byte, 4) //Length of Signature
     binary.BigEndian.PutUint32(l, uint32(len(sign_msg))) //Set Length of Signature
     sign_msg = append(b_s, append(l, append(sign_msg, data...)...)...) //Add header and signature length
@@ -1625,7 +1629,7 @@ func sendDataN_1(step_no uint32, src int, data []byte) {
     binary.BigEndian.PutUint32(b_s[1:], step_no) //Set Step Number
 
     //Sign Message
-    sign_msg, _ := sign.Schnorr(suite, x, data)
+    sign_msg, _ := schnorr.Sign(suite, x, data)
     l := make([]byte, 4) //Length of Signature
     binary.BigEndian.PutUint32(l, uint32(len(sign_msg))) //Set Length of Signature
     sign_msg = append(b_s, append(l, append(sign_msg, data...)...)...) //Add header, step no. and signature length
@@ -1644,7 +1648,7 @@ func sendDataN_1(step_no uint32, src int, data []byte) {
 //Input: Cipher Suite, CP that is sending, Data, Broadcast Flag
 //Output: Length of Signed Message and Bool(Verified / Not)
 //Function: Verrify Sign
-func verifyCPSign(suite abstract.Suite, src_cname string, data []byte) (uint32, bool) {
+func verifyCPSign(suite proof.Suite, src_cname string, data []byte) (uint32, bool) {
 
     //Read Source Public Key from file
     in, _ := ioutil.ReadFile("schnorr/public/" + src_cname + ".pub")
@@ -1660,7 +1664,7 @@ func verifyCPSign(suite abstract.Suite, src_cname string, data []byte) (uint32, 
     msg := data[9:9+ls] //Signed Message
 
     //Verify Signed Message
-    err := sign.VerifySchnorr(suite, src_pub, data[9+ls:], msg)
+    err := schnorr.Verify(suite, src_pub, data[9+ls:], msg)
 
     var f bool //Flag to be returned
 
@@ -1679,10 +1683,10 @@ func verifyCPSign(suite abstract.Suite, src_cname string, data []byte) (uint32, 
 //Input: Points, Points
 //Output: Shuffled Noise
 //Function: Shuffle Noise
-func shuffleNoise(x, y [2]abstract.Point, Y abstract.Point) ([2]abstract.Point, [2]abstract.Point, proof.Prover) {
+func shuffleNoise(x, y [2]kyber.Point, Y kyber.Point) ([2]kyber.Point, [2]kyber.Point, proof.Prover) {
 
-    suite := nist.NewAES128SHA256P256()
-    rand := suite.Cipher(abstract.RandomKey)
+    suite := edwards25519.NewBlakeSHA256Ed25519() //Cipher suite
+    rand := suite.RandomStream() //For Randomness
 
     xbar, ybar, proof := shuffle.Biffle(suite, nil, Y, x, y, rand) //Shuffle Noise Vectors
 
@@ -1712,30 +1716,32 @@ func parseCommonName(conn net.Conn) string {
 //and then computes the challenge c = H(q(sG+A),q(sH+B),t1A+t2G,t1B+t2H) and responses r1 = qc+t1 and r2 = sqc + t2.
 //Besides the proof, this function also returns the re-randomized and re-encrypted base points A1 = q(sG+A)
 //and B1 = q(sG+B).
-func rerandomizeProof(suite abstract.Suite, A, B, G, H abstract.Point, s, q abstract.Scalar) (proof *ReRandomizeProof, A1 abstract.Point, B1 abstract.Point, err error) {
+func rerandomizeProof(suite proof.Suite, A, B, G, H kyber.Point, s, q kyber.Scalar) (proof *ReRandomizeProof, A1 kyber.Point, B1 kyber.Point, err error) {
 
     // Re-Encrypt Base Points
-    A1 = suite.Point().Add(A, suite.Point().Mul(G, s))
-    B1 = suite.Point().Add(B, suite.Point().Mul(H, s))
+    A1 = suite.Point().Add(A, suite.Point().Mul(s, G))
+    B1 = suite.Point().Add(B, suite.Point().Mul(s, H))
 
     // Re-Randomize Base Points
-    A1.Mul(A1, q)
-    B1.Mul(B1, q)
+    A1.Mul(q, A1)
+    B1.Mul(q, B1)
 
     // Commitment
-    t1 := suite.Scalar().Pick(random.Stream)
-    t2 := suite.Scalar().Pick(random.Stream)
-    T1 := suite.Point().Mul(A, t1)
-    T2 := suite.Point().Mul(B, t1)
-    T1.Add(T1, suite.Point().Mul(G, t2))
-    T2.Add(T2, suite.Point().Mul(H, t2))
+    t1 := suite.Scalar().Pick(suite.RandomStream())
+    t2 := suite.Scalar().Pick(suite.RandomStream())
+    T1 := suite.Point().Mul(t1, A)
+    T2 := suite.Point().Mul(t1, B)
+    T1.Add(T1, suite.Point().Mul(t2, G))
+    T2.Add(T2, suite.Point().Mul(t2, H))
 
     // Challenge
-    cb, err := hash.Structures(suite.Hash(), A1, B1, T1, T2)
-    if err != nil {
-        return nil, nil, nil, err
-    }
-    c := suite.Scalar().Pick(suite.Cipher(cb))
+    h := suite.Hash()
+    A1.MarshalTo(h)
+    B1.MarshalTo(h)
+    T1.MarshalTo(h)
+    T2.MarshalTo(h)
+    cb := h.Sum(nil)
+    c := suite.Scalar().Pick(suite.XOF(cb))
 
     // Response
     r1 := suite.Scalar().Mul(q, c)
@@ -1749,45 +1755,55 @@ func rerandomizeProof(suite abstract.Suite, A, B, G, H abstract.Point, s, q abst
 // ReRandomizeProofBatch computes lists of NIZK re-randomize proofs and of
 // encrypted base points A1 and B1. Note that the challenge is computed over all
 // input values.
-func rerandomizeProofBatch(suite abstract.Suite, A, B []abstract.Point, G, H abstract.Point, s, q []abstract.Scalar) (proof []*ReRandomizeProof, A1 []abstract.Point, B1 []abstract.Point, err error) {
+func rerandomizeProofBatch(suite proof.Suite, A, B []kyber.Point, G, H kyber.Point, s, q []kyber.Scalar) (proof []*ReRandomizeProof, A1 []kyber.Point, B1 []kyber.Point, err error) {
     if len(A) != len(B) || len(q) != len(s) || len(A) != len(s) {
         return nil, nil, nil, errors.New("inputs of different lengths")
     }
 
     n := len(s)
     proofs := make([]*ReRandomizeProof, n)
-    t1 := make([]abstract.Scalar, n)
-    t2 := make([]abstract.Scalar, n)
-    T1 := make([]abstract.Point, n)
-    T2 := make([]abstract.Point, n)
-    A1 = make([]abstract.Point, n)
-    B1 = make([]abstract.Point, n)
+    t1 := make([]kyber.Scalar, n)
+    t2 := make([]kyber.Scalar, n)
+    T1 := make([]kyber.Point, n)
+    T2 := make([]kyber.Point, n)
+    A1 = make([]kyber.Point, n)
+    B1 = make([]kyber.Point, n)
 
     for i := 0; i < n; i++ {
 
          // Re-Encrypt Base Points
-         A1[i] = suite.Point().Add(A[i], suite.Point().Mul(G, s[i]))
-         B1[i] = suite.Point().Add(B[i], suite.Point().Mul(H, s[i]))
+         A1[i] = suite.Point().Add(A[i], suite.Point().Mul(s[i], G))
+         B1[i] = suite.Point().Add(B[i], suite.Point().Mul(s[i], H))
 
          // Re-Randomize Base Points
-         A1[i].Mul(A1[i], q[i])
-         B1[i].Mul(B1[i], q[i])
+         A1[i].Mul(q[i], A1[i])
+         B1[i].Mul(q[i], B1[i])
 
          // Commitment
-         t1[i] = suite.Scalar().Pick(random.Stream)
-         t2[i] = suite.Scalar().Pick(random.Stream)
-         T1[i] = suite.Point().Mul(A[i], t1[i])
-         T2[i] = suite.Point().Mul(B[i], t1[i])
-         T1[i].Add(T1[i], suite.Point().Mul(G, t2[i]))
-         T2[i].Add(T2[i], suite.Point().Mul(H, t2[i]))
+         t1[i] = suite.Scalar().Pick(suite.RandomStream())
+         t2[i] = suite.Scalar().Pick(suite.RandomStream())
+         T1[i] = suite.Point().Mul(t1[i], A[i])
+         T2[i] = suite.Point().Mul(t1[i], B[i])
+         T1[i].Add(T1[i], suite.Point().Mul(t2[i], G))
+         T2[i].Add(T2[i], suite.Point().Mul(t2[i], H))
     }
 
     // Challenge
-    cb, err := hash.Structures(suite.Hash(), A1, B1, T1, T2)
-    if err != nil {
-        return nil, nil, nil, err
+    h := suite.Hash()
+    for _, i := range A1 {
+        i.MarshalTo(h)
     }
-    c := suite.Scalar().Pick(suite.Cipher(cb))
+    for _, i := range B1 {
+        i.MarshalTo(h)
+    }
+    for _, i := range T1 {
+        i.MarshalTo(h)
+    }
+    for _, i := range T2 {
+        i.MarshalTo(h)
+    }
+    cb := h.Sum(nil)
+    c := suite.Scalar().Pick(suite.XOF(cb))
 
     // Responses
     for i := 0; i < n; i++ {
@@ -1806,13 +1822,13 @@ func rerandomizeProofBatch(suite abstract.Suite, A, B []abstract.Point, G, H abs
 // The proof is valid if the following two conditions hold:
 //   r1A + r2G == cA1 + T1
 //   r1B + r2H == cB1 + T2
-func (p *ReRandomizeProof) Verify(suite abstract.Suite, A, B, G, H abstract.Point, A1, B1 abstract.Point) error {
-    r1A := suite.Point().Mul(A, p.R1)
-    r1B := suite.Point().Mul(B, p.R1)
-    r2G := suite.Point().Mul(G, p.R2)
-    r2H := suite.Point().Mul(H, p.R2)
-    cA1 := suite.Point().Mul(A1, p.C)
-    cB1 := suite.Point().Mul(B1, p.C)
+func (p *ReRandomizeProof) Verify(suite proof.Suite, A, B, G, H kyber.Point, A1, B1 kyber.Point) error {
+    r1A := suite.Point().Mul(p.R1, A)
+    r1B := suite.Point().Mul(p.R1, B)
+    r2G := suite.Point().Mul(p.R2, G)
+    r2H := suite.Point().Mul(p.R2, H)
+    cA1 := suite.Point().Mul(p.C, A1)
+    cB1 := suite.Point().Mul(p.C, B1)
     a := suite.Point().Add(r1A, r2G)
     b := suite.Point().Add(cA1, p.T1)
     c := suite.Point().Add(r1B, r2H)
