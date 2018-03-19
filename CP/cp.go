@@ -651,6 +651,12 @@ func handleCPs(cpconn chan net.Conn, com_name string) {
                             R[i] = suite.Point().Set(nr[i-b][0])
                             C[i] = suite.Point().Set(nc[i-b][0])
                         }
+
+                        //Free noise variables
+                        nr = nil //Noise ElGamal blinding factors
+                        nc = nil //Noise ElGamal ciphers
+                        nr_o = nil //Shuffled noise elGamal blinding factors
+                        nc_o = nil //Shuffled noise ElGamal ciphers
                     }
 
                 } else if step_no == 7 { //If Step No. 7
@@ -689,6 +695,9 @@ func handleCPs(cpconn chan net.Conn, com_name string) {
 
                 } else if step_no == 8 { //If Step No. 8
 
+                    R_O = make([]kyber.Point, b+n) //Shuffled ElGamal Blinding Factors
+                    C_O = make([]kyber.Point, b+n) //Shuffled ElGamal Ciphers
+
                     //Convert Bytes to Data
                     for i := int64(0); i < b+n; i++ {
 
@@ -725,11 +734,18 @@ func handleCPs(cpconn chan net.Conn, com_name string) {
                         C[i] = suite.Point().Set(C_O[i])
                     }
 
+                    //Free output variables
+                    R_O = nil //Shuffled ElGamal Blinding Factors
+                    C_O = nil  //Shuffled ElGamal Ciphers
+
                 } else if step_no == 9 { //If Step No. 9
 
                     prf := make([]*ReRandomizeProof, b+n)
                     tmp := bytes.NewReader(cp_resp.Proof[0])
                     suite.Read(tmp, prf)
+
+                    R_O = make([]kyber.Point, b+n) //Shuffled ElGamal Blinding Factors
+                    C_O = make([]kyber.Point, b+n) //Shuffled ElGamal Ciphers
 
                     //Convert Bytes to Data
                     for i := int64(0); i < b+n; i++ {
@@ -778,11 +794,18 @@ func handleCPs(cpconn chan net.Conn, com_name string) {
                         C[i] = suite.Point().Set(C_O[i])
                     }
 
+                    //Free output variables
+                    R_O = nil //Shuffled ElGamal Blinding Factors
+                    C_O = nil  //Shuffled ElGamal Ciphers
+
                 } else if step_no == 10 { //If Step No. 10
 
                     prf := make([]*dleq.Proof, b+n)
                     tmp := bytes.NewReader(cp_resp.Proof[0])
                     suite.Read(tmp, prf)
+
+                    R_O = make([]kyber.Point, b+n) //Shuffled ElGamal Blinding Factors
+                    C_O = make([]kyber.Point, b+n) //Shuffled ElGamal Ciphers
 
                     //Convert Bytes to Data
                     for i := int64(0); i < b+n; i++ {
@@ -817,7 +840,14 @@ func handleCPs(cpconn chan net.Conn, com_name string) {
                         //Swap Current Output as Input
                         C[i] = suite.Point().Set(C_O[i])
                     }
+
+                    //Free unused variables
+                    R_O = nil //Shuffled ElGamal Blinding Factors
+                    C_O = nil  //Shuffled ElGamal Ciphers
                 }
+
+                cp_resp = nil
+                buf = nil
 
                 //If Last CP
                 if cp_bcast == no_CPs - 1 {
@@ -1035,9 +1065,7 @@ func broadcastCPData() {
                 resp.C[(2*i)+1] = make([]byte, len(tb.Bytes()))
                 copy(resp.C[(2*i)+1][:], tb.Bytes()) //Convert to bytes
 
-                prf, _ := proof.HashProve(suite, strconv.Itoa(int(cp_s_no+step_no-2))+strconv.Itoa(int(i)), prover[i])
-                resp.Proof[i] = make([]byte, len(prf))
-                copy(resp.Proof[i][:], prf)
+                resp.Proof[i], _ = proof.HashProve(suite, strconv.Itoa(int(cp_s_no+step_no-2))+strconv.Itoa(int(i)), prover[i])
             }
 
             //Convert to Bytes
@@ -1056,6 +1084,10 @@ func broadcastCPData() {
                     R[i] = suite.Point().Set(nr[i-b][0])
                     C[i] = suite.Point().Set(nc[i-b][0])
                 }
+
+                //Free noise variables
+                nr = nil //Noise ElGamal blinding factors
+                nc = nil //Noise ElGamal ciphers
             }
 
         } else if step_no == 7 { //If Step Number is 7
@@ -1093,10 +1125,11 @@ func broadcastCPData() {
                 secret := map[string]kyber.Scalar{"x": tmp}
                 public := map[string]kyber.Point{"B": suite.Point().Base(), "X": r[i]}
                 prover := rep.Prover(suite, secret, public, nil)
-                prf, _ := proof.HashProve(suite, strconv.Itoa(int(cp_s_no+step_no-2))+strconv.Itoa(int(i)), prover)
-                resp.Proof[i] = make([]byte, len(prf))
-                copy(resp.Proof[i][:], prf)
+                resp.Proof[i], _ = proof.HashProve(suite, strconv.Itoa(int(cp_s_no+step_no-2))+strconv.Itoa(int(i)), prover)
             }
+
+            //Free cipher shares
+            c_j = nil
 
             //Convert to Bytes
             resp1, _ := proto.Marshal(resp)
@@ -1113,9 +1146,7 @@ func broadcastCPData() {
             resp.C = make([][]byte, b+n)
             resp.Proof = make([][]byte, 1)
 
-            prf, _ := proof.HashProve(suite, strconv.Itoa(int(cp_s_no+step_no-2)), prover)
-            resp.Proof[0] = make([]byte, len(prf))
-            copy(resp.Proof[0][:], prf)
+            resp.Proof[0], _ = proof.HashProve(suite, strconv.Itoa(int(cp_s_no+step_no-2)), prover)
 
             //Iterate over all Counters
             for i := int64(0); i < b+n; i++ {
@@ -1205,6 +1236,7 @@ func broadcastCPData() {
                 u[i] = suite.Scalar().Set(x) //Set Secret for Decryption
                 p[i] = suite.Point().Base()
             }
+
             prf, _, Ybar, _ := dleq.NewDLEQProofBatch(suite, p, R, u) //Decryption
 
             //Assign to Output Vector and Convert to Bytes
@@ -1459,8 +1491,6 @@ func assignConfig(config *TSmsg.Config) {
 
         k_j[j] = suite.Scalar().Zero() //Initialize with zero
         c_j[j] = suite.Scalar().Zero() //Initialize with zero
-        R[j] = suite.Point().Null() //Initialize with identity element
-        C[j] = suite.Point().Null() //Initialize with identity element
     }
 
     //Iterate over the noise counters
@@ -1471,6 +1501,13 @@ func assignConfig(config *TSmsg.Config) {
         nr[j][1] = suite.Point().Null() //Initialize with identity element
         nc[j][0] = suite.Point().Null() //Initialize with identity element
         nc[j][1] = suite.Point().Base() //Initialize with Base Point
+    }
+
+    //Iterate over all counters
+    for j := int64(0); j < b+n; j++ {
+
+        R[j] = suite.Point().Null() //Initialize with identity element
+        C[j] = suite.Point().Null() //Initialize with identity element
     }
 }
 
