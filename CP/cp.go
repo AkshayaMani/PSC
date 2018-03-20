@@ -456,8 +456,7 @@ func handleCPs(cpconn chan net.Conn, com_name string) {
                 //Convert to bytes
                 var tb bytes.Buffer //Temporary buffer
                 _,_ = schnorr_pub.MarshalTo(&tb)
-                schnorrpub.Y = make([]byte, len(tb.Bytes()))
-                copy(schnorrpub.Y[:], tb.Bytes())
+                schnorrpub.Y = tb.Bytes()
 
                 //Write to file
                 out, _ := proto.Marshal(schnorrpub)
@@ -520,8 +519,7 @@ func handleCPs(cpconn chan net.Conn, com_name string) {
 
 	            b_j[no_cp_res] = buf[9:9+l] //Store Signed Message
                     //Store response
-                    cp_res_byte = make([]byte, len(buf[9+l:]))
-                    copy(cp_res_byte[:], buf[9+l:])
+                    cp_res_byte = buf[9+l:]
 
                     logging.Info.Println("Rebroadcasting msg sent by CP", int(cp_bcast))
                     sendDataN_1(cp_s_no+step_no-2, int(cp_bcast), b_j[no_cp_res]) //Re-Broadcasting
@@ -550,7 +548,7 @@ func handleCPs(cpconn chan net.Conn, com_name string) {
 
             } else if f != true { //If CP Schnorr signature not verified
 
-                logging.Error.Println("CP Schnorr signature not verified")
+                logging.Error.Println("CP Schnorr signature not verified", step_no)
 
                 f_flag = true //Set finish flag
 
@@ -911,7 +909,6 @@ func handleCPs(cpconn chan net.Conn, com_name string) {
 //Function: Broadcasts data of broadcasting CP to other CPs
 func broadcastCPData() {
 
-    var tb bytes.Buffer //Temporary buffer
     resp := new(CPres.Response)
 
     if f_flag == false { //Finish flag not set
@@ -959,20 +956,18 @@ func broadcastCPData() {
             pub_bytes := new(Schnorrkey.Pub)
 
             //Convert to private key to bytes
-            tb.Reset() //Buffer Reset
+            var tb bytes.Buffer //Temporary buffer
             _,_ = schnorr_priv.MarshalTo(&tb)
-            priv_bytes.X = make([]byte, len(tb.Bytes()))
-            copy(priv_bytes.X[:], tb.Bytes())
-
-            //Convert to public key to bytes
-            tb.Reset() //Buffer Reset
-            _,_ = schnorr_pub.MarshalTo(&tb)
-            pub_bytes.Y = make([]byte, len(tb.Bytes()))
-            copy(pub_bytes.Y[:], tb.Bytes())
+            priv_bytes.X = tb.Bytes()
 
             //Write Schnorr private key to file
             out, _ := proto.Marshal(priv_bytes)
             ioutil.WriteFile("schnorr/private/" + cp_cname + ".priv", out, 0644)
+
+            //Convert to public key to bytes
+            tb.Reset() //Buffer Reset
+            _,_ = schnorr_pub.MarshalTo(&tb)
+            pub_bytes.Y = tb.Bytes()
 
             //Write Schnorr public key to file
             out, _ = proto.Marshal(pub_bytes)
@@ -981,17 +976,14 @@ func broadcastCPData() {
             //Set CP response to Schnorr public key
             resp.R = make([][]byte, 1)
             resp.Proof = make([][]byte, 1)
-            resp.R[0] = make([]byte, len(tb.Bytes()))
-            copy(resp.R[0][:], tb.Bytes())
+            resp.R[0] = tb.Bytes()
 
             //Create Proof
             rep := proof.Rep("X", "x", "B")
             secret := map[string]kyber.Scalar{"x": schnorr_priv}
             public := map[string]kyber.Point{"B": suite.Point().Base(), "X": schnorr_pub}
             prover := rep.Prover(suite, secret, public, nil)
-            prf, _ := proof.HashProve(suite, strconv.Itoa(int(cp_s_no+step_no-2)), prover)
-            resp.Proof[0] = make([]byte, len(prf))
-            copy(resp.Proof[0][:], prf)
+            resp.Proof[0], _ = proof.HashProve(suite, strconv.Itoa(int(cp_s_no+step_no-2)), prover)
 
             //Convert to Bytes
             resp1, _ := proto.Marshal(resp)
@@ -1017,9 +1009,7 @@ func broadcastCPData() {
             secret := map[string]kyber.Scalar{"x": x}
             public := map[string]kyber.Point{"B": suite.Point().Base(), "X": y[cp_no]}
             prover := rep.Prover(suite, secret, public, nil)
-            prf, _ := proof.HashProve(suite, strconv.Itoa(int(cp_s_no+step_no-2)), prover)
-            resp.Proof[0] = make([]byte, len(prf))
-            copy(resp.Proof[0][:], prf)
+            resp.Proof[0], _ = proof.HashProve(suite, strconv.Itoa(int(cp_s_no+step_no-2)), prover)
 
             //Convert to Bytes
             resp1, _ := proto.Marshal(resp)
@@ -1045,25 +1035,29 @@ func broadcastCPData() {
                 nc[i][1] = suite.Point().Set(ybar[i][1])
 
                 //Set CP Response to Broadcast Noise
-                tb.Reset() //Buffer Reset
-                xbar[i][0].MarshalTo(&tb)
-                resp.R[2*i] = make([]byte, len(tb.Bytes()))
-                copy(resp.R[2*i][:], tb.Bytes()) //Convert to bytes
+                {
+                    var tb bytes.Buffer //Temporary buffer
+                    xbar[i][0].MarshalTo(&tb)
+                    resp.R[2*i] = tb.Bytes() //Convert to bytes
+                }
 
-                tb.Reset() //Buffer Reset
-                xbar[i][1].MarshalTo(&tb)
-                resp.R[(2*i)+1] = make([]byte, len(tb.Bytes()))
-                copy(resp.R[(2*i)+1][:], tb.Bytes()) //Convert to bytes
+                {
+                    var tb bytes.Buffer //Temporary buffer
+                    xbar[i][1].MarshalTo(&tb)
+                    resp.R[(2*i)+1] = tb.Bytes() //Convert to bytes
+                }
 
-                tb.Reset() //Buffer Reset
-                ybar[i][0].MarshalTo(&tb)
-                resp.C[2*i] = make([]byte, len(tb.Bytes()))
-                copy(resp.C[2*i][:], tb.Bytes()) //Convert to bytes
+                {
+                    var tb bytes.Buffer //Temporary buffer
+                    ybar[i][0].MarshalTo(&tb)
+                    resp.C[2*i] = tb.Bytes() //Convert to bytes
+                }
 
-                tb.Reset() //Buffer Reset
-                ybar[i][1].MarshalTo(&tb)
-                resp.C[(2*i)+1] = make([]byte, len(tb.Bytes()))
-                copy(resp.C[(2*i)+1][:], tb.Bytes()) //Convert to bytes
+                {
+                    var tb bytes.Buffer //Temporary buffer
+                    ybar[i][1].MarshalTo(&tb)
+                    resp.C[(2*i)+1] = tb.Bytes() //Convert to bytes
+                }
 
                 resp.Proof[i], _ = proof.HashProve(suite, strconv.Itoa(int(cp_s_no+step_no-2))+strconv.Itoa(int(i)), prover[i])
             }
@@ -1104,21 +1098,23 @@ func broadcastCPData() {
             for i := int64(0); i < b; i++ {
 
                 //Set CP Response to Broadcast ElGamal Ciphertext of Message Shares
-                tmp.Pick(pseudorand)
-                tb.Reset() //Buffer Reset
-                r[i] = suite.Point().Mul(tmp, nil)
-                R[i].Add(R[i], r[i]) //Multiply ElGamal Bllinding Factors
-                _,_ = r[i].MarshalTo(&tb)
-                resp.R[i] = make([]byte, len(tb.Bytes()))
-                copy(resp.R[i][:], tb.Bytes()) //Convert to bytes
+                {
+                    var tb bytes.Buffer //Temporary buffer
+                    tmp.Pick(pseudorand)
+                    r[i] = suite.Point().Mul(tmp, nil)
+                    R[i].Add(R[i], r[i]) //Multiply ElGamal Bllinding Factors
+                    r[i].MarshalTo(&tb)
+                    resp.R[i] = tb.Bytes() //Convert to bytes
+                }
 
-                tb.Reset() //Buffer Reset
-                c[i] = suite.Point().Mul(tmp, Y)
-                c[i].Add(c[i], suite.Point().Mul(c_j[i], nil))
-                C[i].Add(C[i], c[i]) //Multiply ElGamal Ciphers
-                _,_ = c[i].MarshalTo(&tb)
-                resp.C[i] = make([]byte, len(tb.Bytes()))
-                copy(resp.C[i][:], tb.Bytes()) //Convert to bytes
+                {
+                    var tb bytes.Buffer //Temporary buffer
+                    c[i] = suite.Point().Mul(tmp, Y)
+                    c[i].Add(c[i], suite.Point().Mul(c_j[i], nil))
+                    C[i].Add(C[i], c[i]) //Multiply ElGamal Ciphers
+                    c[i].MarshalTo(&tb)
+                    resp.C[i] = tb.Bytes() //Convert to bytes
+                }
 
                 //Create Proof
                 rep := proof.Rep("X", "x", "B")
@@ -1155,15 +1151,18 @@ func broadcastCPData() {
                 R[i] = suite.Point().Set(Xbar[i])
                 C[i] = suite.Point().Set(Ybar[i])
 
-                tb.Reset() //Buffer Reset
-                Xbar[i].MarshalTo(&tb)
-                resp.R[i] = make([]byte, len(tb.Bytes()))
-                copy(resp.R[i][:], tb.Bytes()) //Convert to bytes
+                //Set CP Response to shuffled ciphertexts
+                {
+                    var tb bytes.Buffer //Temporary buffer
+                    Xbar[i].MarshalTo(&tb)
+                    resp.R[i] = tb.Bytes() //Convert to bytes
+                }
 
-                tb.Reset() //Buffer Reset
-                Ybar[i].MarshalTo(&tb)
-                resp.C[i] = make([]byte, len(tb.Bytes()))
-                copy(resp.C[i][:], tb.Bytes()) //Convert to bytes
+                {
+                    var tb bytes.Buffer //Temporary buffer
+                    Ybar[i].MarshalTo(&tb)
+                    resp.C[i] = tb.Bytes() //Convert to bytes
+                }
             }
 
             //Convert to Bytes
@@ -1198,26 +1197,28 @@ func broadcastCPData() {
             //Iterate over all Counters
             for i := int64(0); i < b+n; i++ {
 
-                //Change its input as Rerandomized Output for Next Verification
+                //Change its input as rerandomized Output for Next Verification
                 R[i] = suite.Point().Set(Xbar[i])
                 C[i] = suite.Point().Set(Ybar[i])
 
-                tb.Reset() //Buffer Reset
-                Xbar[i].MarshalTo(&tb)
-                resp.R[i] = make([]byte, len(tb.Bytes()))
-                copy(resp.R[i][:], tb.Bytes()) //Convert to bytes
+                //Set CP Response to rerandomized ciphertexts
+                {
+                    var tb bytes.Buffer //Temporary buffer
+                    Xbar[i].MarshalTo(&tb)
+                    resp.R[i] = tb.Bytes() //Convert to bytes
+                }
 
-                tb.Reset() //Buffer Reset
-                Ybar[i].MarshalTo(&tb)
-                resp.C[i] = make([]byte, len(tb.Bytes()))
-                copy(resp.C[i][:], tb.Bytes()) //Convert to bytes
+                {
+                    var tb bytes.Buffer //Temporary buffer
+                    Ybar[i].MarshalTo(&tb)
+                    resp.C[i] = tb.Bytes() //Convert to bytes
+                }
             }
 
             //Convert Proof to Bytes
-            tb.Reset()
+            var tb bytes.Buffer //Temporary buffer
             suite.Write(&tb, prf)
-            resp.Proof[0] = make([]byte, len(tb.Bytes()))
-            copy(resp.Proof[0][:], tb.Bytes())
+            resp.Proof[0] = tb.Bytes() //Convert to bytes
 
             //Convert to Bytes
             resp1, _ := proto.Marshal(resp)
@@ -1250,22 +1251,24 @@ func broadcastCPData() {
                 //Change its input as Decrypted Output for Next Verification
                 C[i].Sub(C[i], Ybar[i])
 
-                tb.Reset() //Buffer Reset
-                R[i].MarshalTo(&tb)
-                resp.R[i] = make([]byte, len(tb.Bytes()))
-                copy(resp.R[i][:], tb.Bytes()) //Convert to bytes
+                //Set CP Response to decrypted bins
+                {
+                    var tb bytes.Buffer //Temporary buffer
+                    R[i].MarshalTo(&tb)
+                    resp.R[i] = tb.Bytes() //Convert to bytes
+                }
 
-                tb.Reset() //Buffer Reset
-                C[i].MarshalTo(&tb)
-                resp.C[i] = make([]byte, len(tb.Bytes()))
-                copy(resp.C[i][:], tb.Bytes()) //Convert to bytes
+                {
+                    var tb bytes.Buffer //Temporary buffer
+                    C[i].MarshalTo(&tb)
+                    resp.C[i] = tb.Bytes() //Convert to bytes
+                }
             }
 
             //Convert Proof to Bytes
-            tb.Reset()
+            var tb bytes.Buffer //Temporary buffer
             suite.Write(&tb, prf)
-            resp.Proof[0] = make([]byte, len(tb.Bytes()))
-            copy(resp.Proof[0][:], tb.Bytes())
+            resp.Proof[0] = tb.Bytes() //Convert to bytes
 
             //Convert to Bytes
             resp1, _ := proto.Marshal(resp)
