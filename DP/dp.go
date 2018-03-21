@@ -580,15 +580,15 @@ func handle_stream_event(event []string) {
 
     if host_ip_version == "Hostname" && stream_web == "Web" && stream_circ == "Initial" {
 
-        fld, _ := publicsuffix.EffectiveTLDPlusOne(strings.ToLower(remote_host))
+        sld, _ := publicsuffix.EffectiveTLDPlusOne(strings.ToLower(remote_host))
 
-        if qname == "ExitSecondLevelDomainWebInitialStream" && fld != "" {
+        if qname == "ExitSecondLevelDomainWebInitialStream" && sld != "" {
 
-           incrementCounter(fld) //Increment counter
+           incrementCounter(sld) //Increment counter
 
-        } else if qname == "ExitSecondLevelDomainAlexaWebInitialStream" && fld != "" {
+        } else if qname == "ExitSecondLevelDomainAlexaWebInitialStream" && sld != "" {
 
-            if exact_match := match.ExactMatch(domain_map, fld); exact_match != "" {
+            if exact_match := match.ExactMatch(domain_map, sld); exact_match != "" {
 
                 incrementCounter(exact_match) //Increment counter
             }
@@ -767,20 +767,34 @@ func assignConfig(config *TSmsg.Config) {
 
     if qname == "ExitSecondLevelDomainAlexaWebInitialStream" {
 
-        var no_of_domains int //No. of domains
+        var from_index, to_index int //Domain list index
 
-        if len(qlist) == 1 || len(qlist) == 0 {
+        if len(qlist) == 2 || len(qlist) == 1 || len(qlist) == 0 {
 
-            if len(qlist) == 0 {
+            if len(qlist) == 0 { //If entire list
 
-                no_of_domains = -1
+                from_index = 0
+                to_index = -1
 
             } else {
 
-                var err error //Error
-                no_of_domains, err = strconv.Atoi(qlist[0]) //Convert to integer
+                tmp, err := strconv.Atoi(qlist[0]) //Convert to integer
 
-                checkError(err) //Check error
+      	       	checkError(err) //Check error
+
+                if len(qlist) == 1 { //If only to_index specified
+
+                    from_index = 0 
+                    to_index = tmp
+
+                } else {
+
+                    from_index = tmp
+
+                    to_index, err = strconv.Atoi(qlist[1]) //Convert to integer
+
+                    checkError(err) //Check error
+                }
             }
 
         } else {
@@ -788,7 +802,7 @@ func assignConfig(config *TSmsg.Config) {
             checkError(fmt.Errorf("%s has invalid list", qname)) //Invalid query list
         }
 
-        domain_list := match.LoadDomainList("data/" + config.Q.File["domain"], no_of_domains)
+        domain_list := match.LoadDomainList("data/" + config.Q.File["domain"], from_index, to_index)
 
         domain_map = match.ExactMatchCreateMap(domain_list)
 

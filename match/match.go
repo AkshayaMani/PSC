@@ -49,13 +49,13 @@ import (
 }*/
 
 //Input: File Path
-//Output: List of domains, No.of domains (-1 represents full list)
+//Output: List of domains, From Index, To Index (-1 represents full list)
 //Function: Load domains from file to list
-func LoadDomainList(file_path string, no_of_domains int) (domain_list []string) {
+func LoadDomainList(file_path string, from_index int, to_index int) (domain_list []string) {
 
-    if no_of_domains < -1 {//If no. of domains negative
+    if from_index < 0 || ((from_index >= to_index) && (to_index != -1)) || to_index < -1 {//If index not valid
 
-        checkError(fmt.Errorf("Invalid no. of domains")) //Invalid no. of domains    
+        checkError(fmt.Errorf("Invalid domain index")) //Invalid no. of domains    
     }
 
     count := 0 //Count of domains
@@ -69,22 +69,38 @@ func LoadDomainList(file_path string, no_of_domains int) (domain_list []string) 
     scanner := bufio.NewScanner(file)
     for scanner.Scan() {
 
-        count = count + 1 //Increment count
+        if to_index == -1 { //If until end of list
 
-        if no_of_domains != -1 { //If not entire list
+            if count >= from_index { //If count exceeds from index
 
-            if count > no_of_domains { //If count exceeds no. of domains
+                domain := strings.ToLower(scanner.Text()) //Convert to lower case
+                domain = strings.Trim(domain, " ") //Strip white spaces
+                domain_list = append(domain_list, domain) //Create a list of domains
+            } 
+
+        } else { //If not till end of list
+
+            if count >= from_index && count < to_index { //If count between from and to index
+
+                domain := strings.ToLower(scanner.Text()) //Convert to lower case
+                domain = strings.Trim(domain, " ") //Strip white spaces
+                domain_list = append(domain_list, domain) //Create a list of domains
+
+            } else if count >= to_index { //If count exceeds to index
 
                 break
             }
-        }
+        }        
 
-        domain := strings.ToLower(scanner.Text()) //Convert to lower case
-        domain = strings.Trim(domain, " ") //Strip white spaces
-        domain_list = append(domain_list, domain) //Create a list of domains
+        count = count + 1 //Increment count
     }
 
     checkError(scanner.Err()) //Check for scanner error
+
+    if len(domain_list) == 0 {//If list empty
+
+        checkError(fmt.Errorf("Invalid domain index")) //Invalid no. of domains
+    }
 
     return domain_list
 }
