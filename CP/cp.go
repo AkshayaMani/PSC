@@ -548,7 +548,17 @@ func handleCPs(cpconn chan net.Conn, com_name string) {
 
             } else if f != true { //If CP Schnorr signature not verified
 
-                logging.Error.Println("CP Schnorr signature not verified", step_no)
+                logging.Error.Println("CP Schnorr signature not verified")
+
+                f_flag = true //Set finish flag
+
+                sendTSSignal(ts_s_no+step_no) //Send finish signal to TS
+
+                return
+
+            } else { //If Step No. not verified
+
+                logging.Error.Println("Step No. not verified")
 
                 f_flag = true //Set finish flag
 
