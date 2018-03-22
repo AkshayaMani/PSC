@@ -67,7 +67,7 @@ Set the PSC parameters in PSC/TS/config/Gen_Config.go:
     //var qname = "EntryRemoteIPAddress" //Query name
     //var qname = "EntryRemoteIPAddressCountry" //Query name
     //var qname = "EntryRemoteIPAddressAS" //Query name
-    //var qlist = []string{"-1"} //Query list
+    //var qlist = []string{"0", "-1"} //Query list
     //var qlist = []string{"15169", "56203", "6939"} //Query list
     //var qlist = []string{"US", "AA"} //Query list
     var qlist []string //Query list
@@ -99,7 +99,8 @@ Then run PSC in Tally Server mode:
 The run_psc.sh script provides an easy way to (re)start PSC:
 
 ```
-    PSC/run_psc.sh <goenvironment_name> TS CName Port RestartSeconds [OptArg...]
+    cd PSC/
+    run_psc.sh <goenvironment_name> TS CName Port RestartSeconds [OptArg...]
 ```
 
 Note: if you specify any optional arguments, they must be all one string
@@ -140,7 +141,8 @@ Run PSC in Computation Party mode:
 The run_psc.sh script provides an easy way to (re)start PSC:
 
 ```
-    PSC/run_psc.sh <goenvironment_name> CP CName Port RestartSeconds [OptArg...]
+    cd PSC/
+    run_psc.sh <goenvironment_name> CP CName Port RestartSeconds [OptArg...]
 ```
 
 Note: if you specify any optional arguments, they must be all one string
@@ -261,7 +263,8 @@ Then run PSC in Data Party mode:
 The run_psc.sh script provides an easy way to (re)start PSC:
 
 ```
-    PSC/run_psc.sh <goenvironment_name> DP CName Port RestartSeconds [OptArg...]
+    cd PSC/
+    run_psc.sh <goenvironment_name> DP CName Port RestartSeconds [OptArg...]
 ```
 
 Note: if you specify any optional arguments, they must be all one string

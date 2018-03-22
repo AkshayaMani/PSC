@@ -56,7 +56,7 @@ Also, add default values for country, province, organization, etc.:
     1.organizationName_default      = Computer Science Department
     organizationalUnitName          = Organizational Unit Name (eg, section)
     organizationalUnitName_default  = Private Set-Union Cardinality
-    commonName                      = Common Name (i.e. <usr_common_name>)
+    commonName                      = Common Name (i.e. <usr> common name)
     commonName_max                  = 64
     emailAddress                    = Email Address
     emailAddress_max                = 40

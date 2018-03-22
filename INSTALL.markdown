@@ -20,9 +20,9 @@ Restart your terminal.
 
     nv ls-versions --go-prebuilt
 
-### Create an environment <goenvironment_name> with go 1.7 or later
+### Create an environment <goenvironment_name> with go 1.9 or later
 
-    nv mk <goenvironment_name> --go-prebuilt=1.7.5
+    nv mk <goenvironment_name> --go-prebuilt=1.9.4
 
 ### Activate environment
 
