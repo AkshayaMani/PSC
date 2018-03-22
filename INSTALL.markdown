@@ -31,9 +31,12 @@ Restart your terminal.
 ### Install PSC dependancies
 
     go get -u github.com/golang/protobuf/protoc-gen-go
-    go get gopkg.in/dedis/crypto.v0
     go get golang.org/x/net/publicsuffix
     go get github.com/armon/go-radix
+    go get github.com/dedis/kyber
+    cd $GOPATH/src/github.com/dedis/kyber
+    go get -t ./...
+    go build -tags vartime
 
 ### Download PSC
 
