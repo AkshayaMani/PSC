@@ -24,14 +24,14 @@ Generate new CA key for each network that runs PSC. See CAInstructions.markdown 
 
 ## Exchange CA certificates 
 
-Send CA certificates to all participants and verify them through a trust chain. Add all CA certificates to PSC/CA/certs folder.
+Send CA certificates to all participants and verify them through a trust chain. Add all CA certificates to $GOPATH/src/PSC/CA/certs folder.
 
 ## Generate Public key pair (TS, CP, DP)
 
-You can use PSC/keypair.sh to generate public key pairs for any CP(s), DP(s), or TS in the network. (Remember to modify default certificate folder in openssl.cnf)
+Use the keypair.sh script to generate public key pairs for any CP(s), DP(s), or TS in the network. (Remember to modify default certificate folder in openssl.cnf)
 
 ```
-    cd PSC
+    cd $GOPATH/src/PSC
     ./keypair.sh <usr> <usr_common_name>
 ```
 
@@ -41,7 +41,7 @@ You can use PSC/keypair.sh to generate public key pairs for any CP(s), DP(s), or
     <usr_common_name>   Common name
 ```
 
-PSC uses the common name in the certificate to uniquely identify a node. So, forward the <common_name> and <hostname/ip>:<port> of the CP(s) and DP(s) to the TS.
+PSC uses the common name in the certificate to uniquely identify a node. So, use a unique common name for every \<usr\> while generating certificates. Forward the <common_name> and <hostname/ip>:<port> of the CP(s) and DP(s) to the TS.
 
 ## Tally Server
 
@@ -51,7 +51,7 @@ PSC uses the common name in the certificate to uniquely identify a node. So, for
 
 Choose an IP address and port that is accessible on the Internet. Forward the <TS_common_name> and <TS_hostname/ip>:<TS_port> to CP(s) and DP(s). Receive <common_name> and <hostname/ip>:<port> of all CP(s) and DP(s).
 
-Set the PSC parameters in PSC/TS/config/Gen_Config.go:
+Set the PSC parameters in $GOPATH/src/PSC/TS/config/Gen_Config.go:
 
 ```
     const no_CPs = 2 //No.of CPs
@@ -79,7 +79,7 @@ Set the PSC parameters in PSC/TS/config/Gen_Config.go:
 And generate configuration:
 
 ```
-    cd PSC/TS/config/
+    cd $GOPATH/src/PSC/TS/config/
     go run Gen_Config.go
 ```
 
@@ -92,15 +92,15 @@ PSC is not designed for automated collection and results release: a long enough 
 Then run PSC in Tally Server mode:
 
 ```
-    cd PSC/TS/
+    cd $GOPATH/src/PSC/TS/
     go run ts.go -t "<TS_common_name>" -p "<TS_port>"
 ```
 
 The run_psc.sh script provides an easy way to (re)start PSC:
 
 ```
-    cd PSC/
-    run_psc.sh <goenvironment_name> TS CName Port RestartSeconds [OptArg...]
+    cd $GOPATH/src/PSC/
+    ./run_psc.sh <goenvironment_name> TS CName Port RestartSeconds [OptArg...]
 ```
 
 Note: if you specify any optional arguments, they must be all one string
@@ -122,7 +122,7 @@ Note: if you specify any optional arguments, they must be all one string
 
 Choose an IP address and port that is accessible on the Internet. Forward the <CP_common_name> and <CP_hostname/ip>:<CP_port> to TS. Receive <TS_common_name> and <TS_hostname/ip>:<TS_port>.
 
-Set the TS information in PSC/CP/ts.info:
+Set the TS information in $GOPATH/src/PSC/CP/ts.info:
 
 ```
     Addr <TS_hostname/ip>:<TS_port>
@@ -134,15 +134,15 @@ Set the TS information in PSC/CP/ts.info:
 Run PSC in Computation Party mode:
 
 ```
-    cd PSC/CP/
+    cd $GOPATH/src/PSC/CP/
     go run cp.go -c "<CP_common_name>" -p "<CP_port>"
 ```
 
 The run_psc.sh script provides an easy way to (re)start PSC:
 
 ```
-    cd PSC/
-    run_psc.sh <goenvironment_name> CP CName Port RestartSeconds [OptArg...]
+    cd $GOPATH/src/PSC/
+    ./run_psc.sh <goenvironment_name> CP CName Port RestartSeconds [OptArg...]
 ```
 
 Note: if you specify any optional arguments, they must be all one string
@@ -165,7 +165,7 @@ You need one PSC Data Party per tor relay.
 
 Choose an IP address and port that is accessible on the Internet. Forward the <DP_common_name> and <DP_hostname/ip>:<DP_port> to TS. Receive <TS_common_name> and <TS_hostname/ip>:<TS_port>.
 
-Set the TS information in PSC/DP/ts.info:
+Set the TS information in $GOPATH/src/PSC/DP/ts.info:
 
 ```
     Addr <TS_hostname/ip>:<TS_port>
@@ -231,8 +231,8 @@ CookieAuthentication 1
 Password Authentication:
 
 ```
-cat /dev/random | hexdump -e '"%x"' -n 32 -v > PSC/DP/control_password.txt
-tor --hash-password `cat PSC/DP/control_password.txt`
+cat /dev/random | hexdump -e '"%x"' -n 32 -v > $GOPATH/src/PSC/DP/control_password.txt
+tor --hash-password `cat $GOPATH/src/PSC/DP/control_password.txt`
 ```
 
 torrc:
@@ -256,15 +256,15 @@ Start tor relay manually:
 Then run PSC in Data Party mode:
 
 ```
-    cd PSC/DP/
+    cd $GOPATH/src/PSC/DP/
     go run ts.go -d "<DP_common_name>" -p "<DP_port>"
 ```
 
 The run_psc.sh script provides an easy way to (re)start PSC:
 
 ```
-    cd PSC/
-    run_psc.sh <goenvironment_name> DP CName Port RestartSeconds [OptArg...]
+    cd $GOPATH/src/PSC/
+    ./run_psc.sh <goenvironment_name> DP CName Port RestartSeconds [OptArg...]
 ```
 
 Note: if you specify any optional arguments, they must be all one string
