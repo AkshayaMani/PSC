@@ -257,7 +257,7 @@ Then run PSC in Data Party mode:
 
 ```
     cd $GOPATH/src/PSC/DP/
-    go run ts.go -d "<DP_common_name>" -p "<DP_port>"
+    go run dp.go -d "<DP_common_name>" -p "<DP_port>"
 ```
 
 The run_psc.sh script provides an easy way to (re)start PSC:
