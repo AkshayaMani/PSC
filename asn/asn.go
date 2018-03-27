@@ -204,7 +204,7 @@ func get_random_load_entry(ipasnmap map[string]map[string]string, ipver int) (st
             ipnetbyte = []byte(net.ParseIP(ipnet).To16())
         }
 
-        for i := 0; i < ipver; i++ {
+        for i := 0; i < dprefix/8; i++ {
 
             ip[i] = ipnetbyte[i] | nbyte[i]
         }
