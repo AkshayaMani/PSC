@@ -83,6 +83,8 @@ var q_to_e = map[string]string{ //Map query
     "EntryRemoteIPAddress": "PRIVCOUNT_CONNECTION_CLOSE",
     "EntryRemoteIPAddressCountry": "PRIVCOUNT_CONNECTION_CLOSE",
     "EntryRemoteIPAddressAS": "PRIVCOUNT_CONNECTION_CLOSE",
+    "HSDirStoreOnionAddress": "PRIVCOUNT_HSDIR_CACHE_STORE",
+    "HSDirFetchOnionAddress": "PRIVCOUNT_HSDIR_CACHE_FETCH",
 }
 
 func main() {
@@ -512,11 +514,11 @@ func torControlPortReceive(torControl *goControlTor.TorControl) {
 
                 if strings.HasPrefix(log, "Warning:") {
 
-                    logging.Warning.Println(strings.TrimPrefix(log, "Warning:"))
+                    //logging.Warning.Println(strings.TrimPrefix(log, "Warning:"))
 
                 } else if strings.HasPrefix(log, "Info:") {
 
-                    logging.Info.Println(strings.TrimPrefix(log, "Info:"))
+                    //logging.Info.Println(strings.TrimPrefix(log, "Info:"))
 
                 } else {
 
@@ -535,6 +537,14 @@ func torControlPortReceive(torControl *goControlTor.TorControl) {
                     } else if q_to_e[qname] == "PRIVCOUNT_CONNECTION_CLOSE" {
 
                         handle_connection_event(event[1:])
+
+                    } else if q_to_e[qname] == "PRIVCOUNT_HSDIR_CACHE_STORE" {
+
+                        handle_hsdir_strore_event(event[1:])
+
+                    } else if q_to_e[qname] == "PRIVCOUNT_HSDIR_CACHE_FETCH" {
+
+                        handle_hsdir_fetch_event(event[1:])
                     }
                 }
             }
@@ -646,6 +656,42 @@ func handle_connection_event(event []string) {
 }
 
 //Input: Event
+//Function: Handle hsdir store event and increment counter
+func handle_hsdir_strore_event(event []string) {
+
+    eventmap := map[string]string{}
+
+    for i := 0; i < len(event); i++ {
+
+        tmp := strings.Split(event[i], "=")
+        eventmap[tmp[0]] = tmp[1]
+    }
+
+    if qname == "HSDirStoreOnionAddress" {
+
+        incrementCounter(eventmap["OnionAddress"]) //Increment counter
+    }
+}
+
+//Input: Event
+//Function: Handle hsdir fetch event and increment counter
+func handle_hsdir_fetch_event(event []string) {
+
+    eventmap := map[string]string{}
+
+    for i := 0; i < len(event); i++ {
+
+        tmp := strings.Split(event[i], "=")
+        eventmap[tmp[0]] = tmp[1]
+    }
+
+    if qname == "HSDirFetchOnionAddress" {
+
+        incrementCounter(eventmap["OnionAddress"]) //Increment counter
+    }
+}
+
+//Input: Event
 //Function: Hash and increment counter
 func incrementCounter(event string) {
 
@@ -751,7 +797,7 @@ func assignConfig(config *TSmsg.Config) {
 
     } else {
 
-        if qname == "ExitSecondLevelDomainWebInitialStream" || qname == "EntryRemoteIPAddress" {
+        if qname == "ExitSecondLevelDomainWebInitialStream" || qname == "EntryRemoteIPAddress" || qname == "HSDirStoreOnionAddress" || qname == "HSDirFetchOnionAddress" {
 
             if len(config.Q.List) != 0 {
 
