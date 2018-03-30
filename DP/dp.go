@@ -669,7 +669,10 @@ func handle_hsdir_strore_event(event []string) {
 
     if qname == "HSDirStoreOnionAddress" {
 
-        incrementCounter(eventmap["OnionAddress"]) //Increment counter
+        if _, ok := eventmap["OnionAddress"]; ok {
+
+            incrementCounter(eventmap["OnionAddress"]) //Increment counter
+        }
     }
 }
 
@@ -687,7 +690,10 @@ func handle_hsdir_fetch_event(event []string) {
 
     if qname == "HSDirFetchOnionAddress" {
 
-        incrementCounter(eventmap["OnionAddress"]) //Increment counter
+        if _, ok := eventmap["OnionAddress"]; ok {
+
+            incrementCounter(eventmap["OnionAddress"]) //Increment counter
+        }
     }
 }
 
