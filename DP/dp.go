@@ -514,11 +514,11 @@ func torControlPortReceive(torControl *goControlTor.TorControl) {
 
                 if strings.HasPrefix(log, "Warning:") {
 
-                    //logging.Warning.Println(strings.TrimPrefix(log, "Warning:"))
+                    logging.Warning.Println(strings.TrimPrefix(log, "Warning:"))
 
                 } else if strings.HasPrefix(log, "Info:") {
 
-                    //logging.Info.Println(strings.TrimPrefix(log, "Info:"))
+                    logging.Info.Println(strings.TrimPrefix(log, "Info:"))
 
                 } else {
 
