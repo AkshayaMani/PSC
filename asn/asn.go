@@ -22,8 +22,8 @@ import (
 
 /*func main() {
 
-    ipv4map := CreateIPASNMap("../as-ipv4-coalesced-20171126.ipasn", 4)
-    ipv6map := CreateIPASNMap("../as-ipv6-20171127.ipasn", 6)
+    ipv4map := CreateIPASNMap("../DP/data/as-ipv4-coalesced-20171126.ipasn", 4)
+    ipv6map := CreateIPASNMap("../DP/data/as-ipv6-20171127.ipasn", 6)
 
     for i := 0; i < 8000; i++ {
 
@@ -188,8 +188,10 @@ func get_random_load_entry(ipasnmap map[string]map[string]string, ipver int) (st
     for ipnet := range ipasnmap[sprefix] {
 
         //Choose a random IP from the IP network
-        nbyte := make([]byte, dprefix/8)
-        binary.BigEndian.PutUint32(nbyte, uint32(rand.Intn(dprefix - prefix))) //Just an appoximation as 2^(dprefix - prefix) > dprefix - prefix.
+        nbyte := make([]byte, dprefix/8 - 4)
+        tmp := make([]byte, 4)
+        binary.BigEndian.PutUint32(tmp, uint32(rand.Intn(dprefix - prefix))) //Just an appoximation as 2^(dprefix - prefix) > dprefix - prefix.
+        nbyte = append(nbyte, tmp...)
         ip := make([]byte, dprefix/8)
         ipnetbyte := make([]byte, dprefix/8)
 
@@ -202,7 +204,7 @@ func get_random_load_entry(ipasnmap map[string]map[string]string, ipver int) (st
             ipnetbyte = []byte(net.ParseIP(ipnet).To16())
         }
 
-        for i := 0; i < ipver; i++ {
+        for i := 0; i < dprefix/8; i++ {
 
             ip[i] = ipnetbyte[i] | nbyte[i]
         }
