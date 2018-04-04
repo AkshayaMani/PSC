@@ -624,7 +624,10 @@ func handle_connection_event(event []string) {
 
         if qname == "EntryRemoteIPAddress" {
 
-            incrementCounter(eventmap["RemoteIPAddress"]) //Increment counter
+            if net.ParseIP(remote_host) != nil { //If IP address is valid
+
+                incrementCounter(eventmap["RemoteIPAddress"]) //Increment counter
+            }
 
         } else if qname == "EntryRemoteIPAddressCountry" {
 
@@ -632,7 +635,10 @@ func handle_connection_event(event []string) {
 
                 if contains(qlist, eventmap["RemoteCountryCode"]) {
 
-                    incrementCounter(eventmap["RemoteIPAddress"])
+                    if net.ParseIP(remote_host) != nil { //If IP address is valid
+
+                        incrementCounter(eventmap["RemoteIPAddress"])
+                    }
                 }
             }
 
