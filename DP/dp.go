@@ -608,39 +608,44 @@ func handle_connection_event(event []string) {
         eventmap[tmp[0]] = tmp[1]
     }
 
-    if qname == "EntryRemoteIPAddress" {
+    remote_is_client, _ := strconv.Atoi(eventmap["RemoteIsClientFlag"]) //Remote is client flag
 
-        incrementCounter(eventmap["RemoteIPAddress"]) //Increment counter
+    if remote_is_client == 1 { //If remote is client
 
-    } else if qname == "EntryRemoteIPAddressCountry" {
+        if qname == "EntryRemoteIPAddress" {
 
-        if eventmap["RemoteCountryCode"] != "!!" && eventmap["RemoteCountryCode"] != "??" { 
+            incrementCounter(eventmap["RemoteIPAddress"]) //Increment counter
 
-            if contains(qlist, eventmap["RemoteCountryCode"]) {
+        } else if qname == "EntryRemoteIPAddressCountry" {
+
+            if eventmap["RemoteCountryCode"] != "!!" && eventmap["RemoteCountryCode"] != "??" { 
+
+                if contains(qlist, eventmap["RemoteCountryCode"]) {
+
+                    incrementCounter(eventmap["RemoteIPAddress"])
+                }
+            }
+
+        } else if qname == "EntryRemoteIPAddressAS" {
+
+            var asno string //ASN
+
+            if net.ParseIP(eventmap["RemoteIPAddress"]) != nil {
+
+                if net.ParseIP(eventmap["RemoteIPAddress"]).To4 != nil {
+
+                    asno = asn.FindASN(ipv4asnmap, 4, eventmap["RemoteIPAddress"]) //Find ASN from IPv4 to ASN map 
+
+                } else {
+
+                    asno = asn.FindASN(ipv6asnmap, 6, eventmap["RemoteIPAddress"]) //Find ASN from IPv6 to ASN map
+                }
+            }
+
+            if contains(qlist, asno) {
 
                 incrementCounter(eventmap["RemoteIPAddress"])
             }
-        }
-
-    } else if qname == "EntryRemoteIPAddressAS" {
-
-        var asno string //ASN
-
-        if net.ParseIP(eventmap["RemoteIPAddress"]) != nil {
-
-            if net.ParseIP(eventmap["RemoteIPAddress"]).To4 != nil {
-
-                asno = asn.FindASN(ipv4asnmap, 4, eventmap["RemoteIPAddress"]) //Find ASN from IPv4 to ASN map 
-
-            } else {
-
-                asno = asn.FindASN(ipv6asnmap, 6, eventmap["RemoteIPAddress"]) //Find ASN from IPv6 to ASN map
-            }
-        }
-
-        if contains(qlist, asno) {
-
-            incrementCounter(eventmap["RemoteIPAddress"])
         }
     }
 }
