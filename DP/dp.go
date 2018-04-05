@@ -240,141 +240,138 @@ func handleTS(conn net.Conn) {
 
     conn.Close() //Close connection
 
-    if f_flag == false { //Finish flag not set
+    if ts_config_flag == true { //If TS configuration flag set
 
-        if ts_config_flag == true { //If TS configuration flag set
+        ts_config_flag = false //Set configuration flag to false
 
-            ts_config_flag = false //Set configuration flag to false
+        config := new(TSmsg.Config) //TS configuration
+        proto.Unmarshal(buf, config) //Parse TS configuration
 
-            config := new(TSmsg.Config) //TS configuration
-            proto.Unmarshal(buf, config) //Parse TS configuration
+        assignConfig(config) //Assign configuration
 
-            assignConfig(config) //Assign configuration
+        logging.Info.Println("Sending TS signal. Step No.", step_no)
+        sendTSSignal(ts_s_no+step_no) //Send signal to TS
 
-            logging.Info.Println("Sending TS signal. Step No.", step_no)
-            sendTSSignal(ts_s_no+step_no) //Send signal to TS
+        step_no = 1 //TS step no.
 
-            step_no = 1 //TS step no.
+    } else {
 
-        } else {
+        sig := new(TSmsg.Signal) //TS signal
+        proto.Unmarshal(buf, sig) //Parse TS signal
 
-            sig := new(TSmsg.Signal) //TS signal
-            proto.Unmarshal(buf, sig) //Parse TS signal
+        if *sig.Fflag == true { //If finish flag set
 
-            if *sig.Fflag == true { //If finish flag set
+            logging.Info.Println("TS sent finish")
+            shutdownDP() //Shutdown DP gracefully
 
-                logging.Info.Println("TS sent finish")
-                shutdownDP() //Shutdown DP gracefully
+        } else { //Finish flag not set
 
-            } else { //Finish flag not set
+            if *sig.SNo == int32(ts_s_no+step_no) { //Check TS step no.
 
-                if *sig.SNo == int32(ts_s_no+step_no) { //Check TS step no.
+                suite := edwards25519.NewBlakeSHA256Ed25519()
+                rand := suite.RandomStream()
 
-                    suite := edwards25519.NewBlakeSHA256Ed25519()
-                    rand := suite.RandomStream()
+                if step_no == 1 { //If step no. 1
 
-                    if step_no == 1 { //If step no. 1
+                    //Iterate over all CPs
+                    for i := int32(0); i < no_CPs; i++ {
 
-                        //Iterate over all CPs
-                        for i := int32(0); i < no_CPs; i++ {
+                        resp := new(DPres.Response) //CP-DP keys
+                        resp.TSsno = proto.Int32(int32(ts_s_no+step_no)) //Initialize step no.
 
-                            resp := new(DPres.Response) //CP-DP keys
-                            resp.TSsno = proto.Int32(int32(ts_s_no+step_no)) //Initialize step no.
-
-                            //Initialize CP-DP key
-                            resp.M = make([][]byte, b)
-
-                            //Iterate over hash table
-                            for j := int64(0); j < b; j++ {
-
-                                k[j] = suite.Scalar().Pick(rand) //Choose random keys
-
-                                //Convert to bytes
-                                var tb bytes.Buffer //Temporary buffer
-                                _,_ = k[j].MarshalTo(&tb)
-                                resp.M[j] = tb.Bytes() //Assign CP-DP keys
-
-                                c[j] = suite.Scalar().Add(c[j], k[j]) //Add keys to each counter
-                            }
-
-                            //Convert to bytes
-                            resp1, _ := proto.Marshal(resp)
-
-                            //Send key to CP
-                            logging.Info.Println("Sending symmetric key to CP", i,". Step No.", step_no)
-                            sendDataToDest(resp1, cp_cnames[i], cp_addr[i])
-	                }
-
-                        k = nil //Forget keys
-
-                    } else if step_no == 2 { //If step no. 2
-
-                        logging.Info.Println("Started data collection")
-
-                        wg.Add(1) //Increment WaitGroup counter
-
-                        go collectData() //Start collecting data
-
-                    } else if step_no == 3 && d_flag == true { //If step no. 3 and data collection finished
+                        //Initialize CP-DP key
+                        resp.M = make([][]byte, b)
 
                         //Iterate over hash table
-                        for i := int64(0); i < b; i++ {
+                        for j := int64(0); j < b; j++ {
 
-                            tmp := suite.Scalar().Zero() //Sum of random shares except last CP's
-
-                            //Iterate over all CPs
-                            for j := int32(0); j < no_CPs - 1; j++ {
-
-                                cs[i][j] = suite.Scalar().Pick(rand) //Choose Random Value
-                                tmp = suite.Scalar().Add(cs[i][j], tmp) //Add CP masked data share
-                            }
-
-                            cs[i][no_CPs - 1] = suite.Scalar().Sub(c[i], tmp) //Compute last data share
-                        }
-
-                        //Iterate over all CPs
-                        for i := int32(0); i < no_CPs; i++ {
-
-                            resp := new(DPres.Response) //DP step no. and masked data share
-                            resp.TSsno = proto.Int32(int32(ts_s_no+step_no)) //Initialize step no.
-                            resp.M = make([][]byte, b) //Initialize masked data share
-
-                            //Iterate over hash table
-                            for j := int64(0); j < b; j++ {
-
-                                //Convert to bytes
-                                var tb bytes.Buffer //Temporary buffer
-                                _,_ = cs[j][i].MarshalTo(&tb)
-                                resp.M[j] = tb.Bytes() //Assign masked data share
-                            }
+                            k[j] = suite.Scalar().Pick(rand) //Choose random keys
 
                             //Convert to bytes
-                            resp1, _ := proto.Marshal(resp)
+                            var tb bytes.Buffer //Temporary buffer
+                            _,_ = k[j].MarshalTo(&tb)
+                            resp.M[j] = tb.Bytes() //Assign CP-DP keys
 
-                            //Send data shares to CP
-                            logging.Info.Println("Sending masked data shares to CP", i,". Step No.", step_no)
-                            sendDataToDest(resp1, cp_cnames[i], cp_addr[i])
+                            c[j] = suite.Scalar().Add(c[j], k[j]) //Add keys to each counter
                         }
+
+                        //Convert to bytes
+                        resp1, _ := proto.Marshal(resp)
+
+                        //Send key to CP
+                        logging.Info.Println("Sending symmetric key to CP", i,". Step No.", step_no)
+                        sendDataToDest(resp1, cp_cnames[i], cp_addr[i])
+	            }
+
+                    k = nil //Forget keys
+
+                } else if step_no == 2 { //If step no. 2
+
+                    logging.Info.Println("Started data collection")
+
+                    wg.Add(1) //Increment WaitGroup counter
+
+                    go collectData() //Start collecting data
+
+                } else if step_no == 3 && d_flag == true { //If step no. 3 and data collection finished
+
+                    //Iterate over hash table
+                    for i := int64(0); i < b; i++ {
+
+                        tmp := suite.Scalar().Zero() //Sum of random shares except last CP's
+
+                        //Iterate over all CPs
+                        for j := int32(0); j < no_CPs - 1; j++ {
+
+                            cs[i][j] = suite.Scalar().Pick(rand) //Choose Random Value
+                            tmp = suite.Scalar().Add(cs[i][j], tmp) //Add CP masked data share
+                        }
+
+                        cs[i][no_CPs - 1] = suite.Scalar().Sub(c[i], tmp) //Compute last data share
                     }
 
-                    if step_no != 2 {
+                    //Iterate over all CPs
+                    for i := int32(0); i < no_CPs; i++ {
 
-                        sendTSSignal(ts_s_no+step_no) //Send signal to TS
-                        logging.Info.Println("Sent TS signal ", step_no)
+                        resp := new(DPres.Response) //DP step no. and masked data share
+                        resp.TSsno = proto.Int32(int32(ts_s_no+step_no)) //Initialize step no.
+                        resp.M = make([][]byte, b) //Initialize masked data share
+
+                        //Iterate over hash table
+                        for j := int64(0); j < b; j++ {
+
+                            //Convert to bytes
+                            var tb bytes.Buffer //Temporary buffer
+                            _,_ = cs[j][i].MarshalTo(&tb)
+                            resp.M[j] = tb.Bytes() //Assign masked data share
+                        }
+
+                        //Convert to bytes
+                        resp1, _ := proto.Marshal(resp)
+
+                        //Send data shares to CP
+                        logging.Info.Println("Sending masked data shares to CP", i,". Step No.", step_no)
+                        sendDataToDest(resp1, cp_cnames[i], cp_addr[i])
                     }
-
-                    step_no += 1 //Increment step no.
-
-                } else { //Wrong signal from TS
-
-                    logging.Error.Println("Wrong signal from TS")
-
-                    f_flag = true //Set finish flag
-
-                    sendTSSignal(ts_s_no+step_no) //Send finish signal to TS
-
-                    return
                 }
+
+                if step_no != 2 {
+
+                    sendTSSignal(ts_s_no+step_no) //Send signal to TS
+                    logging.Info.Println("Sent TS signal ", step_no)
+                }
+
+                step_no += 1 //Increment step no.
+
+            } else { //Wrong signal from TS
+
+                logging.Error.Println("Wrong signal from TS")
+
+                f_flag = true //Set finish flag
+
+                sendTSSignal(ts_s_no+step_no) //Send finish signal to TS
+
+                return
             }
         }
     }
