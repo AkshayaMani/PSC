@@ -195,14 +195,17 @@ configure your tor relays using a --defaults-torrc file for common settings:
 
 #### Automatic Configuration
 
-PSC sets ```EnablePrivCount 1``` when it starts a collection round, and
-turns it off at the end of the round. This makes sure that all the totals it
-collects are consistent. You MUST NOT set EnablePrivCount in the torrc: this
-biases the results towards long-running connections.
+PSC does not set ```EnablePrivCount 1``` by default, so you must set it in
+the torrc for each relay. This allows multiple simultaneous collections by
+different projects, using the same relays. Having EnablePrivCount on all the
+time might cause some bias towards long-running connections, circuits, or
+streams. But we think these biases are small.
 
-When PSC is collecting data, it sets ```__ReloadTorrcOnSIGHUP 0``` to
-prevent the PrivCount option being turned off by a HUP. This means that you
-can't change any torrc options during a collection.
+If PSC is configured to set ```EnablePrivCount 1```, it sets the option when
+it starts a collection round, and turns it off at the end of the round. And
+it also sets ```__ReloadTorrcOnSIGHUP 0``` to prevent the PrivCount option
+being turned off by a HUP. This means that you can't change any torrc options
+during a collection.
 
 #### Tor Control Port
 
