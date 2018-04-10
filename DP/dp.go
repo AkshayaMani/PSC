@@ -1006,6 +1006,8 @@ func acceptConnections() {
     }
 }
 
+//Input: Data, Destination common name, Destination address
+//Function: Send data to destination
 func sendDataToDest(data []byte, dst_cname string, dst_addr string) {
 
     //Load Private Key and Certificate
@@ -1026,7 +1028,7 @@ func sendDataToDest(data []byte, dst_cname string, dst_addr string) {
 
     //Dial TCP Connection
     config := tls.Config{Certificates: []tls.Certificate{cert}, RootCAs: caCertPool, ServerName: dst_cname,} //InsecureSkipVerify: true,}
-    con,err := net.Dial("tcp", dst_addr)
+    con, err := reDial(10, 180, dst_addr)
     checkError(err)
 
     //Convert to TLS Connection
@@ -1039,6 +1041,28 @@ func sendDataToDest(data []byte, dst_cname string, dst_addr string) {
     data = append(l, data...) //Append length to data
     _, err = conn.Write(data) //Send Data to Destination
     checkError(err)
+}
+
+//Input: No. of attempts, Sleep time
+//Output: TCP connection, Error
+//Fuction: Attempt TCP dial up few times in case of failure 
+func reDial(attempts int, sleep time.Duration, dst_addr string) (con net.Conn, err error) {
+
+    for i := 0; i < attempts; i++ {
+
+        con, err = net.Dial("tcp", dst_addr)
+
+        if err == nil {
+
+            return con, err
+        }
+
+        time.Sleep(sleep * time.Second)
+
+        logging.Info.Println("Retrying after dial up error:", err)
+    }
+
+    return con, fmt.Errorf("After %d attempts, last error: %s", attempts, err)
 }
 
 //Function: Shutdown DP gracefully
