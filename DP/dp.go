@@ -987,8 +987,8 @@ func assignConfig(config *TSmsg.Config) {
 
                 asnmap[as] = len(m) //Assign a new counter number
 
-       	        m[as] = true //Add as to map
-       	    }
+                m[as] = true //Add as to map
+            }
         }
     }
 
