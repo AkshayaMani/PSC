@@ -19,7 +19,7 @@ func main() {
 
     const no_CPs = 2 //No.of CPs
     const no_DPs = 2 //No. of DPs
-    const b = 2000 //Hash table size
+    const b = 800000 //Hash table size
     var cp_cnames = []string{"CP1", "CP2"} //CP common names
     var dp_cnames = []string{"DP1", "DP2"} //DP common names
     var cp_addr = []string{"10.176.5.24:6100", "10.176.5.25:6100"} //CP addresses
@@ -30,12 +30,19 @@ func main() {
     //var qname = "EntryRemoteIPAddress" //Query name
     //var qname = "EntryRemoteIPAddressCountry" //Query name
     //var qname = "EntryRemoteIPAddressAS" //Query name
+    //var qname = "EntryCountry" //Query name
+    //var qname = "EntryAS" //Query name
+    //var qname = "HSDirStoreOnionAddress" //Query name
+    //var qname = "HSDirFetchOnionAddress" //Query name
+    //var qlist = []string{"10000"} //Query list
     //var qlist = []string{"-1"} //Query list
     //var qlist = []string{"15169", "56203", "6939"} //Query list
     //var qlist = []string{"US", "AA"} //Query list
-    var qlist []string //Query list
-    var qfile = map[string]string{"domain":"sld-Alexa-top-1m.txt"} //Query filename map
-    //var qfile = map[string]string{"ipv4":"as-ipv4-coalesced-20171126.ipasn", "ipv6":"as-ipv6-20171127.ipasn"} //Query filename map
+    var qlist = []string{} //Query list
+    //var qfile = map[string]string{"domain":"sld-Alexa-top-1m.txt"} //Query filename map
+    //var qfile = map[string]string{"ipv4":"as-ipv4-coalesced-20171126.ipasn", "ipv6":"as-ipv6-20171127.ipasn", "asn":"asn.txt"} //Filename map
+    //var qfile = map[string]string{"country":"country.txt"} //Filename map
+    var qfile = map[string]string{} //Filename map
     var n = int64(789592)  //No. of noise vectors
 
     //Assign PSC configuration parameters

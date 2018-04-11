@@ -73,6 +73,8 @@ var torControl = &goControlTor.TorControl{} //Tor control port connection
 var domain_map = map[string]bool{} //Domain map
 var ipv4asnmap = map[string]map[string]string{} //IPv4 to ASN map
 var ipv6asnmap = map[string]map[string]string{} //IPv6 to ASN map  
+var asnmap = map[string]int{} //ASN to counter map
+var countrymap = map[string]int{} //Country to counter map
 var message chan string //Channel to receive message from Tor control port
 var data_col_sig chan bool //Channel to send data collection signal
 var d_flag bool //Data collection finish Flag
@@ -83,6 +85,8 @@ var q_to_e = map[string]string{ //Map query
     "EntryRemoteIPAddress": "PRIVCOUNT_CONNECTION_CLOSE",
     "EntryRemoteIPAddressCountry": "PRIVCOUNT_CONNECTION_CLOSE",
     "EntryRemoteIPAddressAS": "PRIVCOUNT_CONNECTION_CLOSE",
+    "EntryCountry": "PRIVCOUNT_CONNECTION_CLOSE",
+    "EntryAS": "PRIVCOUNT_CONNECTION_CLOSE",
     "HSDirStoreOnionAddress": "PRIVCOUNT_HSDIR_CACHE_STORE",
     "HSDirFetchOnionAddress": "PRIVCOUNT_HSDIR_CACHE_FETCH",
 }
@@ -575,7 +579,7 @@ func handle_stream_event(event []string) {
 
     if net.ParseIP(remote_host) != nil {
 
-        if net.ParseIP(remote_host).To4 != nil {
+        if net.ParseIP(remote_host).To4() != nil {
 
             host_ip_version = "IPv4Literal" //IPv4 address
 
@@ -645,7 +649,7 @@ func handle_connection_event(event []string) {
 
             if net.ParseIP(eventmap["RemoteIPAddress"]) != nil {
 
-                if net.ParseIP(eventmap["RemoteIPAddress"]).To4 != nil {
+                if net.ParseIP(eventmap["RemoteIPAddress"]).To4() != nil {
 
                     asno = asn.FindASN(ipv4asnmap, 4, eventmap["RemoteIPAddress"]) //Find ASN from IPv4 to ASN map 
 
@@ -658,6 +662,34 @@ func handle_connection_event(event []string) {
             if contains(qlist, asno) {
 
                 incrementCounter(eventmap["RemoteIPAddress"])
+            }
+
+        } else if qname == "EntryCountry" {
+
+            if eventmap["RemoteCountryCode"] != "!!" && eventmap["RemoteCountryCode"] != "??" {
+
+                incrementMapCounter(strings.ToLower(eventmap["RemoteCountryCode"]))
+            }
+
+        } else if qname == "EntryAS" {
+
+            var asno string //ASN
+
+            if net.ParseIP(eventmap["RemoteIPAddress"]) != nil {
+
+                if net.ParseIP(eventmap["RemoteIPAddress"]).To4() != nil {
+
+                    asno = asn.FindASN(ipv4asnmap, 4, eventmap["RemoteIPAddress"]) //Find ASN from IPv4 to ASN map
+
+                } else {
+
+                    asno = asn.FindASN(ipv6asnmap, 6, eventmap["RemoteIPAddress"]) //Find ASN from IPv6 to ASN map
+                }
+            }
+
+            if asno != "" {
+
+                incrementMapCounter(asno)
             }
         }
     }
@@ -716,6 +748,29 @@ func incrementCounter(event string) {
     h.Write([]byte(strings.ToLower(event)))
     key := math.Mod(math.Mod(((4.0*float64(h.Sum32()))+7.0), float64(p)), float64(b)) //Map to one of the counters
     c[int(key)].Add(c[int(key)], suite.Scalar().Pick(rand)) //Increment counter by adding a random number
+}
+
+//Input: Event
+//Function: Increment counter
+func incrementMapCounter(event string) {
+
+    suite := edwards25519.NewBlakeSHA256Ed25519()
+    rand := suite.RandomStream()
+
+    if qname == "EntryCountry" { //If entry country query   
+
+        if counter_ind, ok := countrymap[event]; ok {
+
+            c[counter_ind].Add(c[counter_ind], suite.Scalar().Pick(rand)) //Increment counter by adding a random number
+        }
+
+    } else if qname == "EntryAS" { //If entry as query
+
+        if counter_ind, ok := asnmap[event]; ok {
+
+            c[counter_ind].Add(c[counter_ind], suite.Scalar().Pick(rand)) //Increment counter by adding a random number
+        }
+    }
 }
 
 //Input: Command-line Arguments
@@ -811,7 +866,7 @@ func assignConfig(config *TSmsg.Config) {
 
     } else {
 
-        if qname == "ExitSecondLevelDomainWebInitialStream" || qname == "EntryRemoteIPAddress" || qname == "HSDirStoreOnionAddress" || qname == "HSDirFetchOnionAddress" {
+        if qname == "ExitSecondLevelDomainWebInitialStream" || qname == "EntryRemoteIPAddress" || qname == "HSDirStoreOnionAddress" || qname == "HSDirFetchOnionAddress" || qname == "EntryCountry" || qname == "EntryAS" {
 
             if len(config.Q.List) != 0 {
 
@@ -883,7 +938,57 @@ func assignConfig(config *TSmsg.Config) {
         if len(qlist) == 0 {
 
             qname = "EntryRemoteIPAddress"
+        }
 
+    } else if qname == "EntryCountry" {
+
+        m := map[string]bool{} //Map
+
+        //Open file
+        file, err := os.Open("data/" + config.Q.File["country"])
+        checkError(err)
+        defer file.Close()
+
+        //Read line by line
+        scanner := bufio.NewScanner(file)
+        for scanner.Scan() {
+
+            country := strings.ToLower(scanner.Text()) //Convert to lower case
+            country = strings.Trim(country, " ") //Strip white spaces
+
+            if m[country] == false { //Convert to lower case and check if not duplicate
+
+                countrymap[country] = len(m) //Assign a new counter number
+
+                m[country] = true //Add country to map
+            }
+        }  
+
+    } else if qname == "EntryAS" {
+
+        ipv4asnmap = asn.CreateIPASNMap("data/" + config.Q.File["ipv4"], 4)
+        ipv6asnmap = asn.CreateIPASNMap("data/" + config.Q.File["ipv6"], 6)
+
+        m := map[string]bool{} //Map
+
+        //Open file
+        file, err := os.Open("data/" + config.Q.File["asn"])
+        checkError(err)
+        defer file.Close()
+
+        //Read line by line
+        scanner := bufio.NewScanner(file)
+        for scanner.Scan() {
+
+            as := strings.ToLower(scanner.Text()) //Convert to lower case
+            as = strings.Trim(as, " ") //Strip white spaces
+
+            if m[as] == false { //Convert to lower case and check if not duplicate
+
+                asnmap[as] = len(m) //Assign a new counter number
+
+                m[as] = true //Add as to map
+            }
         }
     }
 
