@@ -43,10 +43,12 @@ set -x
 while true; do
     # Launch the command in the correct environment
     # Don't exit this script on a non-zero exit status, just print it
+    echo "Launching PSC. To view logs, run tail -f" \
+	 "$PSC_SCRIPT_DIR"/"$PSC_USR_LOWER.$PSC_CNAME".log
     nv do "$PSC_GOENV" \
         "go run $PSC_USR_LOWER.go -$PSC_USR_CMD $PSC_CNAME -p $PSC_PORT $@" \
         2>&1 \
-        | tee -a "$PSC_SCRIPT_DIR"/"$PSC_USR_LOWER.$PSC_CNAME".log \
+        >> "$PSC_SCRIPT_DIR"/"$PSC_USR_LOWER.$PSC_CNAME".log \
         || echo "Exit $?"
     # Wait for relaunch
     sleep "$PSC_RESTART"
