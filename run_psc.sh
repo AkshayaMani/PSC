@@ -37,17 +37,17 @@ shift
 
 cd "$PSC_SCRIPT_DIR"/"$PSC_USR_UPPER"
 
-# Echo commands
-set -x
+# Once the loop is running, don't exit this script on a non-zero exit status
+set +e
 
+# Don't write anything to stdout or stderr in this loop: the kernel will terminate
+# the shell if there is no terminal attached to it
 while true; do
     # Launch the command in the correct environment
-    # Don't exit this script on a non-zero exit status, just print it
     nv do "$PSC_GOENV" \
         "go run $PSC_USR_LOWER.go -$PSC_USR_CMD $PSC_CNAME -p $PSC_PORT $@" \
-        2>&1 \
-        | tee -a "$PSC_SCRIPT_DIR"/"$PSC_USR_LOWER.$PSC_CNAME".log \
-        || echo "Exit $?"
+        >> "$PSC_SCRIPT_DIR"/"$PSC_USR_LOWER.$PSC_CNAME".log 2>&1 \
+        || echo "Exit $?" >> "$PSC_SCRIPT_DIR"/"$PSC_USR_LOWER.$PSC_CNAME".log
     # Wait for relaunch
     sleep "$PSC_RESTART"
 done
