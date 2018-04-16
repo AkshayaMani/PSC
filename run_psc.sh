@@ -46,8 +46,7 @@ while true; do
     # Launch the command in the correct environment
     nv do "$PSC_GOENV" \
         "go run $PSC_USR_LOWER.go -$PSC_USR_CMD $PSC_CNAME -p $PSC_PORT $@" \
-        2>&1 \
-        >> "$PSC_SCRIPT_DIR"/"$PSC_USR_LOWER.$PSC_CNAME".log \
+        >> "$PSC_SCRIPT_DIR"/"$PSC_USR_LOWER.$PSC_CNAME".log 2>&1 \
         || echo "Exit $?" >> "$PSC_SCRIPT_DIR"/"$PSC_USR_LOWER.$PSC_CNAME".log
     # Wait for relaunch
     sleep "$PSC_RESTART"
