@@ -39,7 +39,7 @@ import (
     "time"
 )
 
-const p = 1000003 //Universal hash parameter p
+const p = 10000019 //Universal hash parameter p
 
 var no_CPs int32 //No.of CPs
 var no_DPs int32 //No. of DPs
