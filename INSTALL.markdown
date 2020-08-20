@@ -20,9 +20,9 @@ Restart your terminal.
 
     nv ls-versions --go-prebuilt
 
-### Create an environment <goenvironment_name> with go 1.9 or later
+### Create an environment <goenvironment_name> with go 1.13 or later
 
-    nv mk <goenvironment_name> --go-prebuilt=1.9.4
+    nv mk <goenvironment_name> --go-prebuilt=1.13.3
 
 ### Activate environment
 
@@ -33,10 +33,12 @@ Restart your terminal.
     go get -u github.com/golang/protobuf/protoc-gen-go
     go get golang.org/x/net/publicsuffix
     go get github.com/armon/go-radix
-    go get github.com/dedis/kyber
-    cd $GOPATH/src/github.com/dedis/kyber
+    go get go.dedis.ch/kyber
+    cd $GOPATH/src/go.dedis.ch/kyber
     go get -t ./...
     go build -tags vartime
+    go get go.dedis.ch/fixbuf
+    go get golang.org/x/crypto/blake2b
 
 ### Download PSC
 

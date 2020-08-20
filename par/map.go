@@ -1,8 +1,8 @@
 package par
 
 import(
-    "github.com/dedis/kyber"
-    "github.com/dedis/kyber/proof"
+    "go.dedis.ch/kyber"
+    "go.dedis.ch/kyber/proof"
 )
 
 // Map over a slices of Elgamal Ciphers with the given parallel for-loop.
